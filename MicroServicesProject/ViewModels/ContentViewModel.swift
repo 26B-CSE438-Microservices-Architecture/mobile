@@ -8,7 +8,7 @@ final class ContentViewModel: ObservableObject {
     @Published var markets: [Vendor] = MockData.markets
     @Published var activeOrder: Order? = MockData.activeOrder
     @Published var pastOrders: [Order] = MockData.pastOrders
-    @Published var cartItems: [CartItem] = []
+    @Published var cartItems: [CartItem] = MockData.activeOrder.items
 
     let shortcuts = MockData.shortcuts
     let campaigns = MockData.campaigns
@@ -18,9 +18,7 @@ final class ContentViewModel: ObservableObject {
         restaurants + markets
     }
 
-    var currentAddress: Address {
-        userProfile.addresses.first(where: { $0.isCurrent }) ?? userProfile.addresses[0]
-    }
+    @Published var selectedAddress: Address = MockData.userProfile.addresses.first(where: { $0.isCurrent }) ?? MockData.userProfile.addresses[0]
 
     var featuredRestaurants: [Vendor] {
         restaurants.sorted { $0.rating > $1.rating }
@@ -174,7 +172,7 @@ final class ContentViewModel: ObservableObject {
             total: cartTotal,
             dateLabel: "Bugün, 13:24",
             statusLabel: "Sipariş alındı",
-            addressLine: "\(currentAddress.line1), \(currentAddress.detail)",
+            addressLine: "\(selectedAddress.line1), \(selectedAddress.detail)",
             etaRange: "20-30 dk",
             campaignNote: cartDiscount > 0 ? "40 TL sepet indirimi uygulandı" : "Standart teslimat",
             courier: Courier(

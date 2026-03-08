@@ -2,6 +2,8 @@ import Foundation
 
 enum AppTab: Hashable {
     case home
+    case favorites
+    case cart
     case orders
     case profile
 }

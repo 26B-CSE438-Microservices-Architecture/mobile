@@ -10,6 +10,10 @@ struct TrendyolGoPrototypeView: View {
             switch viewModel.selectedTab {
             case .home:
                 HomeView()
+            case .favorites:
+                FavoritesView()
+            case .cart:
+                CartFlowView(isPresented: .constant(true))
             case .orders:
                 OrdersView()
             case .profile:
@@ -17,25 +21,7 @@ struct TrendyolGoPrototypeView: View {
             }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            VStack(spacing: 0) {
-                if viewModel.cartItemCount > 0 {
-                    CartDockButton(
-                        title: "\(viewModel.cartItemCount) ürün",
-                        subtitle: viewModel.cartTotal.formatted(.currency(code: "TRY"))
-                    ) {
-                        isCartPresented = true
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    .background(.ultraThinMaterial)
-                }
-
-                ReferenceTabBar(selectedTab: $viewModel.selectedTab)
-            }
-        }
-        .sheet(isPresented: $isCartPresented) {
-            CartFlowView(isPresented: $isCartPresented)
-                .environmentObject(viewModel)
+            ReferenceTabBar(selectedTab: $viewModel.selectedTab)
         }
         .fullScreenCover(isPresented: $showLaunchFlow) {
             LaunchFlowView(isPresented: $showLaunchFlow)
@@ -46,12 +32,16 @@ struct TrendyolGoPrototypeView: View {
 struct HomeView: View {
     @EnvironmentObject private var viewModel: ContentViewModel
     @State private var isSearchPresented = false
+    @State private var isShowingAddressSelector = false
 
     var body: some View {
         NavigationStack {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 20) {
-                    HomeHeader(address: viewModel.currentAddress)
+                    HomeHeader(
+                        address: viewModel.selectedAddress,
+                        onAddressTap: { isShowingAddressSelector = true }
+                    )
 
                     Button {
                         isSearchPresented = true
@@ -122,8 +112,7 @@ struct HomeView: View {
                         .padding(.vertical, 2)
                     }
 
-                    SectionHeader(title: "Sana özel lezzetler", actionLabel: "Favoriler") {
-                        FavoritesView()
+                    SectionHeader(title: "Sana özel lezzetler", actionLabel: "") {
                     }
 
                     VStack(spacing: 14) {
@@ -137,16 +126,18 @@ struct HomeView: View {
                         }
                     }
                 }
-                .padding(.horizontal, 16)
-                .padding(.top, 12)
-                .padding(.bottom, 28)
+                .padding(16)
+                .padding(.bottom, 24)
             }
             .background(AppTheme.canvas.ignoresSafeArea())
-            .toolbar(.hidden, for: .navigationBar)
+            .navigationBarHidden(true)
         }
         .sheet(isPresented: $isSearchPresented) {
             SearchView()
                 .environmentObject(viewModel)
+        }
+        .fullScreenCover(isPresented: $isShowingAddressSelector) {
+            AddressSelectionView(isPresented: $isShowingAddressSelector)
         }
     }
 }
@@ -627,11 +618,31 @@ struct ReferenceTabBar: View {
     var body: some View {
         HStack {
             ReferenceTabBarItem(
-                title: "Anasayfa",
-                systemImage: "house.fill",
+                title: "Keşfet",
+                systemImage: "safari.fill",
                 isSelected: selectedTab == .home
             ) {
                 selectedTab = .home
+            }
+
+            Spacer()
+
+            ReferenceTabBarItem(
+                title: "Favorilerim",
+                systemImage: "heart.fill",
+                isSelected: selectedTab == .favorites
+            ) {
+                selectedTab = .favorites
+            }
+
+            Spacer()
+
+            ReferenceTabBarItem(
+                title: "Sepetim",
+                systemImage: "cart.fill",
+                isSelected: selectedTab == .cart
+            ) {
+                selectedTab = .cart
             }
 
             Spacer()
@@ -988,7 +999,7 @@ struct CartView: View {
                         Text(viewModel.cartVendorName ?? "Sepet")
                             .font(.system(size: 24, weight: .bold, design: .rounded))
                             .foregroundStyle(AppTheme.ink)
-                        Text("Teslimat adresi: \(viewModel.currentAddress.title)")
+                        Text("Teslimat adresi: \(viewModel.selectedAddress.title)")
                             .font(.system(size: 14, weight: .medium, design: .rounded))
                             .foregroundStyle(AppTheme.subtleText)
                     }
@@ -1014,14 +1025,6 @@ struct CartView: View {
         .background(AppTheme.canvas.ignoresSafeArea())
         .navigationTitle("Sepetim")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
-                Button("Kapat") {
-                    isPresented = false
-                }
-                .foregroundStyle(AppTheme.orange)
-            }
-        }
         .safeAreaInset(edge: .bottom) {
             if !viewModel.cartItems.isEmpty {
                 NavigationLink {
@@ -1057,11 +1060,11 @@ struct CheckoutView: View {
             VStack(alignment: .leading, spacing: 18) {
                 CheckoutSection(title: "Teslimat adresi") {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text(viewModel.currentAddress.title)
+                        Text(viewModel.selectedAddress.title)
                             .font(.system(size: 17, weight: .bold, design: .rounded))
                             .foregroundStyle(AppTheme.ink)
-                        Text(viewModel.currentAddress.line1)
-                        Text(viewModel.currentAddress.detail)
+                        Text(viewModel.selectedAddress.line1)
+                        Text(viewModel.selectedAddress.detail)
                     }
                     .font(.system(size: 14, weight: .medium, design: .rounded))
                     .foregroundStyle(AppTheme.subtleText)
@@ -1273,32 +1276,37 @@ struct FavoritesView: View {
     @EnvironmentObject private var viewModel: ContentViewModel
 
     var body: some View {
-        ScrollView(showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 16) {
-                if viewModel.favoriteVendors.isEmpty {
-                    EmptyStateView(
-                        title: "Henüz favorin yok",
-                        subtitle: "Kalp ikonuna basarak mağazaları burada toplayabilirsin.",
-                        systemImage: "heart.fill"
-                    )
-                    .padding(.top, 80)
-                } else {
-                    ForEach(viewModel.favoriteVendors) { vendor in
-                        NavigationLink {
-                            RestaurantDetailView(vendor: vendor)
-                        } label: {
-                            VendorCard(vendor: vendor, compact: false)
+        NavigationStack {
+            VStack(spacing: 0) {
+                ReferenceHeader(title: "Favorilerim")
+
+                ScrollView(showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 16) {
+                        if viewModel.favoriteVendors.isEmpty {
+                            EmptyStateView(
+                                title: "Henüz favorin yok",
+                                subtitle: "Kalp ikonuna basarak mağazaları burada toplayabilirsin.",
+                                systemImage: "heart.fill"
+                            )
+                            .padding(.top, 80)
+                        } else {
+                            ForEach(viewModel.favoriteVendors) { vendor in
+                                NavigationLink {
+                                    RestaurantDetailView(vendor: vendor)
+                                } label: {
+                                    VendorCard(vendor: vendor, compact: false)
+                                }
+                                .buttonStyle(.plain)
+                            }
                         }
-                        .buttonStyle(.plain)
                     }
+                    .padding(16)
+                    .padding(.bottom, 24)
                 }
+                .background(AppTheme.referenceBackground.ignoresSafeArea())
             }
-            .padding(16)
-            .padding(.bottom, 24)
+            .toolbar(.hidden, for: .navigationBar)
         }
-        .background(AppTheme.canvas.ignoresSafeArea())
-        .navigationTitle("Favorilerim")
-        .navigationBarTitleDisplayMode(.inline)
     }
 }
 
@@ -1705,42 +1713,86 @@ struct NotificationsView: View {
 
 struct HomeHeader: View {
     let address: Address
+    let onAddressTap: () -> Void
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            VStack(alignment: .leading, spacing: 6) {
-                Label("Teslimat adresi", systemImage: "location.fill")
-                    .font(.system(size: 13, weight: .bold, design: .rounded))
-                    .foregroundStyle(AppTheme.orange)
-
-                Text(address.title)
-                    .font(.system(size: 22, weight: .black, design: .rounded))
+        HStack {
+            Button {
+                // Settings/Profile could go here, replacing the X
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 20, weight: .regular))
                     .foregroundStyle(AppTheme.ink)
-
-                Text("\(address.line1), \(address.detail)")
-                    .font(.system(size: 14, weight: .medium, design: .rounded))
-                    .foregroundStyle(AppTheme.subtleText)
-                    .lineLimit(2)
             }
+            .buttonStyle(.plain)
 
             Spacer()
 
-            HStack(spacing: 10) {
-                NavigationLink {
-                    FavoritesView()
+            Button(action: onAddressTap) {
+                HStack(spacing: 8) {
+                    Image(systemName: "mappin.circle.fill")
+                        .font(.system(size: 20))
+                        .foregroundStyle(AppTheme.orange)
+                    
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text("Teslimat Adresi")
+                            .font(.system(size: 10, weight: .bold, design: .rounded))
+                            .foregroundStyle(AppTheme.subtleText)
+                        Text("\(address.title) (\(address.detail.prefix(10))..)")
+                            .font(.system(size: 13, weight: .bold, design: .rounded))
+                            .foregroundStyle(AppTheme.ink)
+                    }
+                    
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(AppTheme.orange)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(
+                    Capsule()
+                        .stroke(AppTheme.segmentBorder, lineWidth: 1.0)
+                        .background(Color.white)
+                )
+            }
+            .buttonStyle(.plain)
+
+            Spacer()
+
+            HStack(spacing: 16) {
+                Button {
+                    // Assistant
                 } label: {
-                    HeaderIconButton(systemImage: "heart.fill")
+                    VStack(spacing: 4) {
+                        Image(systemName: "message.badge")
+                            .font(.system(size: 20))
+                        Text("Asistan")
+                            .font(.system(size: 10, weight: .medium))
+                    }
+                    .foregroundStyle(AppTheme.ink)
                 }
                 .buttonStyle(.plain)
 
-                NavigationLink {
-                    NotificationsView()
+                Button {
+                    // Coupons
                 } label: {
-                    HeaderIconButton(systemImage: "bell.fill")
+                    VStack(spacing: 4) {
+                        Image(systemName: "percent")
+                            .font(.system(size: 14, weight: .bold))
+                            .padding(2)
+                            .background(
+                                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                                    .fill(AppTheme.canvas)
+                            )
+                        Text("Kuponlar")
+                            .font(.system(size: 10, weight: .medium))
+                    }
+                    .foregroundStyle(AppTheme.ink)
                 }
                 .buttonStyle(.plain)
             }
         }
+        .padding(.vertical, 8)
     }
 }
 
@@ -2625,6 +2677,168 @@ private extension VendorTheme {
         case .red:
             return LinearGradient(colors: [Color(red: 0.97, green: 0.41, blue: 0.39), Color(red: 0.78, green: 0.18, blue: 0.24)], startPoint: .topLeading, endPoint: .bottomTrailing)
         }
+    }
+}
+
+struct AddressSelectionView: View {
+    @Binding var isPresented: Bool
+    @EnvironmentObject private var viewModel: ContentViewModel
+    
+    var body: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Düzenle butonuna basarak konumunu ve adres bilgilerini düzenleyebilir veya adresini silebilirsin.")
+                    .font(.system(size: 14, weight: .medium, design: .rounded))
+                    .foregroundStyle(AppTheme.ink)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
+                
+                VStack(spacing: 12) {
+                    Button {
+                        // Mevcut konum action
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "location.circle")
+                                .font(.system(size: 18))
+                            Text("Mevcut Konumumu Kullan")
+                                .font(.system(size: 15, weight: .bold, design: .rounded))
+                        }
+                        .foregroundStyle(AppTheme.orange)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .stroke(AppTheme.segmentBorder, lineWidth: 1)
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    
+                    Button {
+                        // Yeni adres ekle action
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "plus.circle")
+                                .font(.system(size: 18))
+                            Text("Yeni Adres Ekle")
+                                .font(.system(size: 15, weight: .bold, design: .rounded))
+                        }
+                        .foregroundStyle(AppTheme.orange)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .stroke(AppTheme.segmentBorder, lineWidth: 1)
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 16)
+                
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 12) {
+                        ForEach(viewModel.userProfile.addresses) { address in
+                            AddressSelectionCard(
+                                address: address,
+                                isSelected: viewModel.selectedAddress.id == address.id,
+                                onSelect: {
+                                    viewModel.selectedAddress = address
+                                    isPresented = false
+                                }
+                            )
+                        }
+                    }
+                    .padding(16)
+                }
+            }
+            .background(AppTheme.canvas.ignoresSafeArea())
+            .navigationTitle("Teslimat Adresi Seç")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        isPresented = false
+                    } label: {
+                        Image(systemName: "xmark")
+                            .foregroundStyle(AppTheme.subtleText)
+                            .font(.system(size: 20))
+                    }
+                }
+            }
+        }
+    }
+}
+
+struct AddressSelectionCard: View {
+    let address: Address
+    let isSelected: Bool
+    let onSelect: () -> Void
+    
+    var body: some View {
+        Button(action: onSelect) {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(alignment: .top, spacing: 12) {
+                    // Radio button
+                    ZStack {
+                        Circle()
+                            .stroke(isSelected ? AppTheme.orange : AppTheme.subtleText, lineWidth: 2)
+                            .frame(width: 20, height: 20)
+                        
+                        if isSelected {
+                            Circle()
+                                .fill(AppTheme.orange)
+                                .frame(width: 10, height: 10)
+                        }
+                    }
+                    .padding(.top, 2)
+                    
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            Text(address.title)
+                                .font(.system(size: 16, weight: .bold, design: .rounded))
+                                .foregroundStyle(AppTheme.ink)
+                            Spacer()
+                            Button {
+                                // Düzenle action
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "pencil")
+                                        .font(.system(size: 12))
+                                    Text("Düzenle")
+                                        .font(.system(size: 13, weight: .bold, design: .rounded))
+                                }
+                                .foregroundStyle(AppTheme.orange)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        
+                        Text("\(address.line1)\n\(address.detail)")
+                            .font(.system(size: 14, weight: .regular, design: .rounded))
+                            .foregroundStyle(AppTheme.subtleText)
+                            .multilineTextAlignment(.leading)
+                    }
+                }
+                .padding(16)
+                
+                // Optional map view mockup if it's the current selected one? 
+                if isSelected && address.title.lowercased() == "ev" {
+                    Rectangle()
+                        .fill(Color.blue.opacity(0.1))
+                        .frame(height: 100)
+                        .overlay(
+                            Image(systemName: "mappin.circle.fill")
+                                .font(.system(size: 40))
+                                .foregroundStyle(AppTheme.successGreen)
+                        )
+                }
+            }
+            .background(Color.white)
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(isSelected ? AppTheme.orange : AppTheme.segmentBorder, lineWidth: isSelected ? 2 : 1)
+            )
+        }
+        .buttonStyle(.plain)
     }
 }
 
