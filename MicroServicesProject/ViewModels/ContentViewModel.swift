@@ -13,6 +13,17 @@ final class ContentViewModel: ObservableObject {
     let shortcuts = MockData.shortcuts
     let campaigns = MockData.campaigns
     let userProfile = MockData.userProfile
+    let homeSearchSuggestions = MockData.homeSearchSuggestions
+    let homePrimaryServices = MockData.homePrimaryServices
+    let homeMiniServices = MockData.homeMiniServices
+    let homeCuisines = MockData.homeCuisines
+    let homeQuickFilters = MockData.homeQuickFilters
+    let homeHeroBanners = MockData.homeHeroBanners
+    let homeRewardsOverview = MockData.homeRewardsOverview
+    let homePersonalRestaurants = MockData.homePersonalRestaurants
+    let homeCampaignRestaurants = MockData.homeCampaignRestaurants
+    let homeMarkets = MockData.homeMarkets
+    let homeOpportunities = MockData.homeOpportunities
 
     var allVendors: [Vendor] {
         restaurants + markets
@@ -84,6 +95,11 @@ final class ContentViewModel: ObservableObject {
                 }
             }
         }
+    }
+
+    func selectAddress(_ address: Address) {
+        selectedAddress = address
+        selectedTab = .home
     }
 
     func addToCart(product: Product, from vendor: Vendor, selectedOptions: [String] = [], note: String = "", quantity: Int = 1) {
