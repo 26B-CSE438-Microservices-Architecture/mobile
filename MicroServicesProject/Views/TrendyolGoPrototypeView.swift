@@ -22,7 +22,7 @@ struct TrendyolGoPrototypeView: View {
             }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            ReferenceTabBar(selectedTab: $viewModel.selectedTab)
+            ReferenceTabBar()
         }
         .fullScreenCover(isPresented: $showLaunchFlow) {
             LaunchFlowView(isPresented: $showLaunchFlow)
@@ -51,7 +51,25 @@ struct HomeView: View {
 
                 ScrollView(showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 20) {
-                        HomePrimaryServiceGrid(cards: viewModel.homePrimaryServices)
+                        if !viewModel.isInFoodService {
+                            HomePrimaryServiceGrid(cards: viewModel.homePrimaryServices)
+                        } else {
+                            // In Food section, we might show a back button or special header
+                            Button {
+                                viewModel.isInFoodService = false
+                            } label: {
+                                HStack {
+                                    Image(systemName: "chevron.left")
+                                    Text("Ana Sayfa'ya Dön")
+                                }
+                                .font(.system(size: 14, weight: .bold))
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 8)
+                                .background(AppTheme.orangeSoft)
+                                .clipShape(Capsule())
+                            }
+                            .padding(.horizontal, 16)
+                        }
 
                         HomeMiniServiceRow(cards: viewModel.homeMiniServices)
 
@@ -305,6 +323,7 @@ struct HomePrimaryServiceGrid: View {
 }
 
 struct HomePrimaryServiceCard: View {
+    @EnvironmentObject private var viewModel: ContentViewModel
     let card: HomePrimaryService
     let isTall: Bool
 
@@ -379,6 +398,11 @@ struct HomePrimaryServiceCard: View {
             }
         }
         .frame(height: cardHeight)
+        .onTapGesture {
+            if card.style == .food {
+                viewModel.isInFoodService = true
+            }
+        }
     }
 
     private var backgroundColor: Color {
@@ -2347,7 +2371,7 @@ struct AccountRow: View {
 }
 
 struct ReferenceTabBar: View {
-    @Binding var selectedTab: AppTab
+    @EnvironmentObject private var viewModel: ContentViewModel
 
     var body: some View {
         VStack(spacing: 0) {
@@ -2359,28 +2383,46 @@ struct ReferenceTabBar: View {
                 ReferenceTabBarItem(
                     title: "Anasayfa",
                     systemImage: "house.fill",
-                    isSelected: selectedTab == .home
+                    isSelected: viewModel.selectedTab == .home
                 ) {
-                    selectedTab = .home
+                    viewModel.selectedTab = .home
+                }
+
+                if viewModel.isInFoodService {
+                    ReferenceTabBarItem(
+                        title: "Favoriler",
+                        systemImage: "heart.fill",
+                        isSelected: viewModel.selectedTab == .favorites
+                    ) {
+                        viewModel.selectedTab = .favorites
+                    }
+
+                    ReferenceTabBarItem(
+                        title: "Sepetim",
+                        systemImage: "basket.fill",
+                        isSelected: viewModel.selectedTab == .cart
+                    ) {
+                        viewModel.selectedTab = .cart
+                    }
                 }
 
                 ReferenceTabBarItem(
                     title: "Siparişlerim",
                     systemImage: "list.clipboard.fill",
-                    isSelected: selectedTab == .orders
+                    isSelected: viewModel.selectedTab == .orders
                 ) {
-                    selectedTab = .orders
+                    viewModel.selectedTab = .orders
                 }
 
                 ReferenceTabBarItem(
                     title: "Hesabım",
                     systemImage: "person.fill",
-                    isSelected: selectedTab == .profile
+                    isSelected: viewModel.selectedTab == .profile
                 ) {
-                    selectedTab = .profile
+                    viewModel.selectedTab = .profile
                 }
             }
-            .frame(height: 48)
+            .frame(height: 52)
             .padding(.top, 4)
         }
         .background(Color.white)

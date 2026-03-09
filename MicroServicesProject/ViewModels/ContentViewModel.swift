@@ -25,6 +25,14 @@ final class ContentViewModel: ObservableObject {
     let homeMarkets = MockData.homeMarkets
     let homeOpportunities = MockData.homeOpportunities
 
+    @Published var isInFoodService: Bool = false {
+        didSet {
+            if isInFoodService {
+                selectedTab = .home
+            }
+        }
+    }
+
     var allVendors: [Vendor] {
         restaurants + markets
     }
