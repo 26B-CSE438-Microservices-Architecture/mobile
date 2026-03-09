@@ -130,7 +130,7 @@ struct HomeView: View {
                 .scrollClipDisabled()
             }
             .safeAreaInset(edge: .top, spacing: 0) {
-                VStack(spacing: 12) {
+                VStack(spacing: 10) {
                     TrendyolGoHomeHeader(
                         address: viewModel.selectedAddress,
                         onAddressTap: { isShowingAddressSelector = true }
@@ -144,8 +144,8 @@ struct HomeView: View {
                     .buttonStyle(.plain)
                 }
                 .padding(.horizontal, 16)
-                .padding(.top, 6)
-                .padding(.bottom, 10)
+                .padding(.top, 3)
+                .padding(.bottom, 7)
                 .background(AppTheme.orange)
             }
             .toolbar(.hidden, for: .navigationBar)
@@ -173,25 +173,25 @@ struct TrendyolGoHomeHeader: View {
     }
 
     var body: some View {
-        HStack(alignment: .center, spacing: 10) {
+        HStack(alignment: .center, spacing: 6) {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(alignment: .bottom, spacing: 0) {
                     Text("trendyol")
-                        .font(.system(size: 23, weight: .medium))
+                        .font(.system(size: 20, weight: .medium))
                         .foregroundStyle(.white)
                     Text("go")
-                        .font(.system(size: 23, weight: .medium))
+                        .font(.system(size: 20, weight: .medium))
                         .foregroundStyle(.white)
                     HomeLogoSpeedLines()
                         .padding(.leading, 1)
-                        .padding(.bottom, 8)
+                        .padding(.bottom, 7)
                 }
                 Text("by Uber Eats")
-                    .font(.system(size: 17, weight: .black))
+                    .font(.system(size: 14.5, weight: .black))
                     .foregroundStyle(.black)
                     .lineLimit(1)
             }
-            .frame(width: 146, alignment: .leading)
+            .frame(width: 104, alignment: .leading)
             .layoutPriority(1)
 
             Button(action: onAddressTap) {
@@ -205,9 +205,10 @@ struct TrendyolGoHomeHeader: View {
                             .font(.system(size: 9.5, weight: .semibold))
                             .foregroundStyle(AppTheme.referenceText)
                         Text(addressText)
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(.system(size: 12.5, weight: .semibold))
                             .foregroundStyle(.black)
                             .lineLimit(1)
+                            .minimumScaleFactor(0.75)
                     }
 
                     Image(systemName: "chevron.down")
@@ -229,16 +230,16 @@ struct TrendyolGoHomeHeader: View {
             } label: {
                 VStack(spacing: 0) {
                     Image(systemName: "bell.fill")
-                        .font(.system(size: 32, weight: .regular))
+                        .font(.system(size: 28, weight: .regular))
                         .foregroundStyle(AppTheme.referenceTitle)
                     Text("Bildirimler")
-                        .font(.system(size: 10.5, weight: .medium))
+                        .font(.system(size: 9, weight: .medium))
                         .foregroundStyle(AppTheme.referenceTitle)
                 }
-                .frame(width: 72)
+                .frame(width: 58)
             }
             .buttonStyle(.plain)
-            .frame(width: 64)
+            .frame(width: 54)
         }
     }
 }
@@ -365,9 +366,9 @@ struct HomePrimaryServiceCard: View {
 
                 case .food:
                     HomeRemoteImage(urlString: card.imageURL, artwork: .burger)
-                        .frame(width: width * 0.93, height: 156)
+                        .frame(width: width * 0.93, height: 148)
                         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                        .offset(x: width * 0.035, y: 104)
+                        .offset(x: width * 0.035, y: 112)
 
                 case .water:
                     HomeRemoteImage(urlString: card.imageURL, artwork: .water)
@@ -786,9 +787,9 @@ struct HomeRewardsCard: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .center) {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
                     .fill(
                         LinearGradient(
                             colors: [Color(red: 0.98, green: 0.35, blue: 0.12), Color(red: 0.92, green: 0.15, blue: 0.16)],
@@ -796,25 +797,25 @@ struct HomeRewardsCard: View {
                             endPoint: .bottomTrailing
                         )
                     )
-                    .frame(width: 40, height: 40)
+                    .frame(width: 54, height: 54)
                     .overlay(
                         Text("go\nplus")
-                            .font(.system(size: 9, weight: .black))
+                            .font(.system(size: 12, weight: .black))
                             .foregroundStyle(.white)
                             .multilineTextAlignment(.center)
                     )
 
                 Text(rewards.title)
-                    .font(.system(size: 15, weight: .medium))
+                    .font(.system(size: 21, weight: .medium))
                     .foregroundStyle(AppTheme.referenceTitle)
                 Text("\(rewards.currentPoints)")
-                    .font(.system(size: 18, weight: .black))
+                    .font(.system(size: 22, weight: .black))
                     .foregroundStyle(.red)
 
                 Spacer()
 
                 Text("Nasıl Puan Kazanırım?")
-                    .font(.system(size: 7, weight: .medium))
+                    .font(.system(size: 15, weight: .medium))
                     .foregroundStyle(AppTheme.referenceTitle)
             }
 
@@ -824,7 +825,7 @@ struct HomeRewardsCard: View {
 
             HStack(alignment: .top, spacing: 12) {
                 Text(rewards.summary)
-                    .font(.system(size: 8.5, weight: .medium))
+                    .font(.system(size: 17, weight: .medium))
                     .foregroundStyle(AppTheme.referenceTitle)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -837,10 +838,10 @@ struct HomeRewardsCard: View {
                                 endPoint: .bottomTrailing
                             )
                         )
-                        .frame(width: 36, height: 36)
+                        .frame(width: 56, height: 56)
                         .overlay(
                             Image(systemName: "chevron.right")
-                                .font(.system(size: 14, weight: .black))
+                                .font(.system(size: 22, weight: .black))
                                 .foregroundStyle(.white)
                         )
                 }
@@ -849,10 +850,10 @@ struct HomeRewardsCard: View {
 
             HStack(alignment: .top, spacing: 10) {
                 Image(systemName: "chevron.up")
-                    .font(.system(size: 18, weight: .bold))
+                    .font(.system(size: 16, weight: .bold))
                     .foregroundStyle(AppTheme.referenceMuted)
                 Text(rewards.detail)
-                    .font(.system(size: 5, weight: .medium))
+                    .font(.system(size: 7.5, weight: .medium))
                     .foregroundStyle(AppTheme.referenceMuted)
             }
 
@@ -863,7 +864,7 @@ struct HomeRewardsCard: View {
                     HStack {
                         ForEach(rewards.milestones) { item in
                             Text("\(item.points)")
-                                .font(.system(size: 7, weight: .bold))
+                                .font(.system(size: 16, weight: .bold))
                                 .foregroundStyle(AppTheme.referenceTitle)
                                 .frame(maxWidth: .infinity)
                         }
@@ -872,17 +873,17 @@ struct HomeRewardsCard: View {
                     ZStack(alignment: .leading) {
                         Capsule()
                             .fill(AppTheme.referenceDivider)
-                            .frame(height: 7)
+                            .frame(height: 10)
 
                         Capsule()
                             .fill(Color.red)
-                            .frame(width: max(26, availableWidth * progress), height: 7)
+                            .frame(width: max(42, availableWidth * progress), height: 10)
 
                         HStack {
                             ForEach(rewards.milestones) { item in
                                 Circle()
                                     .fill(Color.white)
-                                    .frame(width: 24, height: 24)
+                                    .frame(width: 30, height: 30)
                                     .overlay(
                                         HomeMiniArtwork(artwork: item.artwork)
                                     )
@@ -894,7 +895,7 @@ struct HomeRewardsCard: View {
                     HStack(alignment: .top) {
                         ForEach(rewards.milestones) { item in
                             Text(item.title)
-                                .font(.system(size: 4.8, weight: .semibold))
+                                .font(.system(size: 7.5, weight: .semibold))
                                 .foregroundStyle(AppTheme.referenceTitle)
                                 .multilineTextAlignment(.center)
                                 .frame(maxWidth: .infinity)
@@ -902,9 +903,9 @@ struct HomeRewardsCard: View {
                     }
                 }
             }
-            .frame(height: 88)
+            .frame(height: 124)
         }
-        .padding(12)
+        .padding(20)
         .background(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .fill(Color.white)
@@ -1336,6 +1337,7 @@ struct HomeMarketArtwork: View {
                             Text(productTitle)
                                 .font(.system(size: 8, weight: .black))
                                 .foregroundStyle(.white)
+                                .lineLimit(2)
                         }
                         if let oldPriceText = card.oldPriceText {
                             Text(oldPriceText)
@@ -1347,6 +1349,8 @@ struct HomeMarketArtwork: View {
                             Text(priceText)
                                 .font(.system(size: 22, weight: .black))
                                 .foregroundStyle(.white)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.7)
                         }
                         Spacer()
                     }
