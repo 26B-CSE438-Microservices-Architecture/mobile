@@ -2,33 +2,34 @@ import Combine
 import SwiftUI
 
 final class ContentViewModel: ObservableObject {
-    @Published var selectedTab: AppTab = .home
-    @Published var searchText: String = ""
-    @Published var restaurants: [Vendor] = MockData.restaurants
-    @Published var markets: [Vendor] = MockData.markets
-    @Published var activeOrder: Order? = MockData.activeOrder
-    @Published var pastOrders: [Order] = MockData.pastOrders
-    @Published var cartItems: [CartItem] = MockData.activeOrder.items
+    @Published var restaurants: [Vendor]
+    @Published var markets: [Vendor]
+    @Published var activeOrder: Order?
+    @Published var pastOrders: [Order]
+    @Published var cartItems: [CartItem]
 
-    let shortcuts = MockData.shortcuts
-    let campaigns = MockData.campaigns
-    let userProfile = MockData.userProfile
-    let homeSearchSuggestions = MockData.homeSearchSuggestions
-    let homePrimaryServices = MockData.homePrimaryServices
-    let homeMiniServices = MockData.homeMiniServices
-    let homeCuisines = MockData.homeCuisines
-    let homeQuickFilters = MockData.homeQuickFilters
-    let homeHeroBanners = MockData.homeHeroBanners
-    let homeRewardsOverview = MockData.homeRewardsOverview
-    let homePersonalRestaurants = MockData.homePersonalRestaurants
-    let homeCampaignRestaurants = MockData.homeCampaignRestaurants
-    let homeMarkets = MockData.homeMarkets
-    let homeOpportunities = MockData.homeOpportunities
+    let shortcuts: [CategoryShortcut]
+    let campaigns: [Campaign]
+    let userProfile: UserProfile
+    let homeSearchSuggestions: [String]
+    let homePrimaryServices: [HomePrimaryService]
+    let homeMiniServices: [HomeMiniService]
+    let homeCuisines: [HomeCuisine]
+    let homeQuickFilters: [HomeQuickFilter]
+    let homeHeroBanners: [HomeHeroBanner]
+    let homeRewardsOverview: HomeRewardsOverview
+    let homePersonalRestaurants: [HomeRestaurantSpotlight]
+    let homeCampaignRestaurants: [HomeRestaurantSpotlight]
+    let homeMarkets: [HomeMarketSpotlight]
+    let homeOpportunities: [HomeOpportunitySpotlight]
+
+    var onTabChange: ((AppTab) -> Void)?
+    private let repository: AppRepository
 
     @Published var isInFoodService: Bool = false {
         didSet {
             if isInFoodService {
-                selectedTab = .home
+                onTabChange?(.home)
             }
         }
     }
@@ -37,7 +38,32 @@ final class ContentViewModel: ObservableObject {
         restaurants + markets
     }
 
-    @Published var selectedAddress: Address = MockData.userProfile.addresses.first(where: { $0.isCurrent }) ?? MockData.userProfile.addresses[0]
+    @Published var selectedAddress: Address
+
+    init(repository: AppRepository) {
+        self.repository = repository
+        restaurants = repository.restaurants
+        markets = repository.markets
+        activeOrder = repository.activeOrder
+        pastOrders = repository.pastOrders
+        cartItems = repository.cartItems
+        selectedAddress = repository.selectedAddress
+
+        shortcuts = repository.shortcuts
+        campaigns = repository.campaigns
+        userProfile = repository.userProfile
+        homeSearchSuggestions = repository.homeSearchSuggestions
+        homePrimaryServices = repository.homePrimaryServices
+        homeMiniServices = repository.homeMiniServices
+        homeCuisines = repository.homeCuisines
+        homeQuickFilters = repository.homeQuickFilters
+        homeHeroBanners = repository.homeHeroBanners
+        homeRewardsOverview = repository.homeRewardsOverview
+        homePersonalRestaurants = repository.homePersonalRestaurants
+        homeCampaignRestaurants = repository.homeCampaignRestaurants
+        homeMarkets = repository.homeMarkets
+        homeOpportunities = repository.homeOpportunities
+    }
 
     var featuredRestaurants: [Vendor] {
         restaurants.sorted { $0.rating > $1.rating }
@@ -88,136 +114,62 @@ final class ContentViewModel: ObservableObject {
         max(0, cartSubtotal + cartDeliveryFee + cartServiceFee - cartDiscount)
     }
 
-    var searchResults: [Vendor] {
-        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty else { return [] }
-
-        return allVendors.filter { vendor in
-            vendor.name.localizedCaseInsensitiveContains(query) ||
-            vendor.summary.localizedCaseInsensitiveContains(query) ||
-            vendor.tags.contains(where: { $0.localizedCaseInsensitiveContains(query) }) ||
-            vendor.menuSections.contains { section in
-                section.products.contains { product in
-                    product.name.localizedCaseInsensitiveContains(query) ||
-                    product.description.localizedCaseInsensitiveContains(query)
-                }
-            }
-        }
-    }
-
     func selectAddress(_ address: Address) {
-        selectedAddress = address
-        selectedTab = .home
+        repository.selectAddress(address)
+        refreshState()
+        onTabChange?(.home)
     }
 
     func addToCart(product: Product, from vendor: Vendor, selectedOptions: [String] = [], note: String = "", quantity: Int = 1) {
-        guard quantity > 0 else { return }
-
-        if let currentVendorID = cartItems.first?.vendorID, currentVendorID != vendor.id {
-            cartItems.removeAll()
-        }
-
-        if let index = cartItems.firstIndex(where: {
-            $0.product.id == product.id &&
-            $0.vendorID == vendor.id &&
-            $0.selectedOptions == selectedOptions &&
-            $0.note == note
-        }) {
-            cartItems[index].quantity += quantity
-            return
-        }
-
-        let item = CartItem(
+        repository.addToCart(
             product: product,
-            vendorID: vendor.id,
-            vendorName: vendor.name,
+            from: vendor,
             selectedOptions: selectedOptions,
             note: note,
             quantity: quantity
         )
-        cartItems.append(item)
+        refreshState()
     }
 
     func incrementQuantity(for item: CartItem) {
-        guard let index = cartItems.firstIndex(where: { $0.id == item.id }) else { return }
-        cartItems[index].quantity += 1
+        repository.incrementQuantity(for: item)
+        refreshState()
     }
 
     func decrementQuantity(for item: CartItem) {
-        guard let index = cartItems.firstIndex(where: { $0.id == item.id }) else { return }
-
-        if cartItems[index].quantity == 1 {
-            cartItems.remove(at: index)
-        } else {
-            cartItems[index].quantity -= 1
-        }
+        repository.decrementQuantity(for: item)
+        refreshState()
     }
 
     func toggleFavorite(for vendor: Vendor) {
-        if let index = restaurants.firstIndex(where: { $0.id == vendor.id }) {
-            restaurants[index].isFavorite.toggle()
-            return
-        }
-
-        if let index = markets.firstIndex(where: { $0.id == vendor.id }) {
-            markets[index].isFavorite.toggle()
-        }
+        repository.toggleFavorite(for: vendor)
+        refreshState()
     }
 
     func reorder(_ order: Order) {
-        cartItems = order.items
-        selectedTab = .home
+        repository.reorder(order)
+        refreshState()
+        onTabChange?(.home)
     }
 
     func placeOrder() {
         guard !cartItems.isEmpty else { return }
-
-        if let currentActive = activeOrder {
-            let archivedActive = Order(
-                vendorName: currentActive.vendorName,
-                items: currentActive.items,
-                total: currentActive.total,
-                dateLabel: currentActive.dateLabel,
-                statusLabel: "Teslim edildi",
-                addressLine: currentActive.addressLine,
-                etaRange: currentActive.etaRange,
-                campaignNote: currentActive.campaignNote,
-                courier: nil,
-                steps: currentActive.steps,
-                activeStep: currentActive.steps.count - 1,
-                isActive: false
-            )
-            pastOrders.insert(archivedActive, at: 0)
-        }
-
-        let createdOrder = Order(
-            vendorName: cartVendorName ?? "Sipariş",
-            items: cartItems,
+        repository.placeOrder(
             total: cartTotal,
-            dateLabel: "Bugün, 13:24",
-            statusLabel: "Sipariş alındı",
-            addressLine: "\(selectedAddress.line1), \(selectedAddress.detail)",
-            etaRange: "20-30 dk",
             campaignNote: cartDiscount > 0 ? "40 TL sepet indirimi uygulandı" : "Standart teslimat",
-            courier: Courier(
-                name: "Kurye Atanıyor",
-                vehicle: "Motosiklet",
-                plate: "--",
-                phone: "+90 555 000 00 00",
-                etaNote: "Hazırlık tamamlandığında kurye bilgisi güncellenecek"
-            ),
-            steps: [
-                OrderStep(title: "Sipariş alındı", detail: "Restorana iletildi", symbol: "checkmark.circle.fill"),
-                OrderStep(title: "Hazırlanıyor", detail: "Ürünler hazırlanıyor", symbol: "bag.fill"),
-                OrderStep(title: "Kurye yolda", detail: "Kurye teslim alacak", symbol: "bicycle.circle.fill"),
-                OrderStep(title: "Teslim edildi", detail: "Teslim sonrası burada göreceksin", symbol: "house.fill")
-            ],
-            activeStep: 0,
-            isActive: true
+            addressLine: "\(selectedAddress.line1), \(selectedAddress.detail)",
+            vendorName: cartVendorName ?? "Sipariş"
         )
+        refreshState()
+        onTabChange?(.orders)
+    }
 
-        activeOrder = createdOrder
-        cartItems.removeAll()
-        selectedTab = .orders
+    private func refreshState() {
+        restaurants = repository.restaurants
+        markets = repository.markets
+        activeOrder = repository.activeOrder
+        pastOrders = repository.pastOrders
+        cartItems = repository.cartItems
+        selectedAddress = repository.selectedAddress
     }
 }
