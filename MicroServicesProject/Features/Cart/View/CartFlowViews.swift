@@ -1,12 +1,14 @@
 import SwiftUI
 import Combine
+import WebKit
 
 struct CartFlowView: View {
     @Binding var isPresented: Bool
+    @Binding var showsReferenceTabBar: Bool
 
     var body: some View {
         NavigationStack {
-            CartView(isPresented: $isPresented)
+            CartView(isPresented: $isPresented, showsReferenceTabBar: $showsReferenceTabBar)
         }
     }
 }
@@ -14,7 +16,9 @@ struct CartFlowView: View {
 struct CartView: View {
     @EnvironmentObject private var viewModel: ContentViewModel
     @Binding var isPresented: Bool
+    @Binding var showsReferenceTabBar: Bool
     @StateObject private var cartViewModel = CartViewModel()
+    @State private var isCheckoutActive = false
 
     var body: some View {
         ScrollView(showsIndicators: false) {
@@ -49,42 +53,39 @@ struct CartView: View {
                         discount: cartViewModel.cartDiscount,
                         total: cartViewModel.cartTotal
                     )
+
+                    NavigationLink(isActive: $isCheckoutActive) {
+                        CheckoutView(isPresented: $isPresented, showsReferenceTabBar: $showsReferenceTabBar)
+                    } label: {
+                        HStack {
+                            Text("Ödemeye geç")
+                                .font(.system(size: 16, weight: .bold, design: .rounded))
+                            Spacer()
+                            Text(cartViewModel.cartTotal.formatted(.currency(code: "TRY")))
+                                .font(.system(size: 15, weight: .black, design: .rounded))
+                        }
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 16)
+                        .background(AppTheme.orange, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
                 }
                 .padding(16)
-                .padding(.bottom, 90)
+                .padding(.bottom, 32)
             }
         }
         .background(AppTheme.canvas.ignoresSafeArea())
         .navigationTitle("Sepetim")
         .navigationBarTitleDisplayMode(.inline)
-        .safeAreaInset(edge: .bottom) {
-            if !cartViewModel.cartItems.isEmpty {
-                NavigationLink {
-                    CheckoutView(isPresented: $isPresented)
-                } label: {
-                    HStack {
-                        Text("Ödemeye geç")
-                            .font(.system(size: 16, weight: .bold, design: .rounded))
-                        Spacer()
-                        Text(cartViewModel.cartTotal.formatted(.currency(code: "TRY")))
-                            .font(.system(size: 15, weight: .black, design: .rounded))
-                    }
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 18)
-                    .padding(.vertical, 16)
-                    .background(AppTheme.orange, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-                }
-                .buttonStyle(.plain)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
-                .background(.ultraThinMaterial)
-            }
-        }
         .onAppear {
             cartViewModel.sync(from: viewModel)
         }
         .onReceive(viewModel.objectWillChange) { _ in
             cartViewModel.sync(from: viewModel)
+        }
+        .onAppear {
+            showsReferenceTabBar = true
         }
     }
 }
@@ -92,6 +93,7 @@ struct CartView: View {
 struct CheckoutView: View {
     @EnvironmentObject private var viewModel: ContentViewModel
     @Binding var isPresented: Bool
+    @Binding var showsReferenceTabBar: Bool
     @StateObject private var checkoutViewModel = CheckoutViewModel()
 
     var body: some View {
@@ -110,20 +112,20 @@ struct CheckoutView: View {
                 }
 
                 CheckoutSection(title: "Ödeme yöntemi") {
-                    ForEach(viewModel.userProfile.paymentMethods) { method in
-                        HStack {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(method.title)
-                                    .font(.system(size: 16, weight: .bold, design: .rounded))
-                                    .foregroundStyle(AppTheme.ink)
-                                Text(method.detail)
-                                    .font(.system(size: 13, weight: .medium, design: .rounded))
-                                    .foregroundStyle(AppTheme.subtleText)
-                            }
-                            Spacer()
-                            if method.isDefault {
-                                TagPill(text: "Varsayılan", tint: AppTheme.orangeSoft)
-                            }
+                    VStack(alignment: .leading, spacing: 14) {
+                        Label("Kart bilgisi uygulamada tutulmaz", systemImage: "lock.shield.fill")
+                            .font(.system(size: 15, weight: .bold, design: .rounded))
+                            .foregroundStyle(AppTheme.ink)
+
+                        Text("payment-service hosted checkout form döndürüyor. Doğru akışta mobile yalnızca bu HTML içeriğini WebView içinde render eder; kart numarası, CVC ve SKT native ekranda tutulmaz.")
+                            .font(.system(size: 13, weight: .medium, design: .rounded))
+                            .foregroundStyle(AppTheme.subtleText)
+
+                        VStack(alignment: .leading, spacing: 8) {
+                            PaymentFlowRow(title: "1. Checkout", detail: "POST /payments ile checkout form alınıyor")
+                            PaymentFlowRow(title: "2. WebView", detail: "checkoutForm.content render ediliyor")
+                            PaymentFlowRow(title: "3. Callback", detail: "callback intercept edilip /checkout-form/callback çağrılıyor")
+                            PaymentFlowRow(title: "4. Sipariş", detail: "Payment AUTHORIZED olunca sipariş tamamlanıyor")
                         }
                     }
                 }
@@ -137,6 +139,23 @@ struct CheckoutView: View {
                         total: viewModel.cartTotal
                     )
                 }
+
+                CheckoutSection(title: "Demo notları") {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Bu ekran local Docker üstündeki payment-service mock provider’ına bağlanır. Test kartları hosted form içinde hazır gelir.")
+                            .font(.system(size: 13, weight: .medium, design: .rounded))
+                            .foregroundStyle(AppTheme.subtleText)
+
+                        PaymentTestHint(text: "Başarılı kart: 5528 7900 0000 0008")
+                        PaymentTestHint(text: "Declined: 4111 1111 1111 1129")
+                        PaymentTestHint(text: "Insufficient: 4111 1111 1111 1111")
+                        PaymentTestHint(text: "Expired: 4111 1111 1111 1100")
+                    }
+                }
+
+                if let banner = checkoutViewModel.banner {
+                    PaymentBannerCard(banner: banner)
+                }
             }
             .padding(16)
             .padding(.bottom, 90)
@@ -146,16 +165,224 @@ struct CheckoutView: View {
         .navigationBarTitleDisplayMode(.inline)
         .safeAreaInset(edge: .bottom) {
             PrimaryActionButton(
-                title: "Siparişi onayla",
+                title: checkoutViewModel.isPreparingCheckout ? "Ödeme ekranı hazırlanıyor..." : "Hosted checkout aç",
                 subtitle: viewModel.cartTotal.formatted(.currency(code: "TRY"))
             ) {
-                checkoutViewModel.confirmOrder(using: viewModel)
-                isPresented = false
+                guard !checkoutViewModel.isPreparingCheckout else { return }
+                Task {
+                    await checkoutViewModel.startHostedCheckout(using: viewModel)
+                }
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
             .background(.ultraThinMaterial)
         }
+        .sheet(item: hostedCheckoutBinding) { session in
+            HostedCheckoutSheet(
+                session: session,
+                isCompleting: checkoutViewModel.isCompletingCheckout,
+                onClose: {
+                    checkoutViewModel.dismissHostedCheckout()
+                },
+                onCallbackIntercepted: {
+                    Task {
+                        await checkoutViewModel.handleHostedCheckoutCallback(using: viewModel)
+                        if checkoutViewModel.hostedCheckoutSession == nil {
+                            isPresented = false
+                        }
+                    }
+                }
+            )
+        }
+        .onAppear {
+            showsReferenceTabBar = false
+        }
+        .onDisappear {
+            showsReferenceTabBar = true
+        }
+    }
+}
+
+private struct HostedCheckoutSheet: View {
+    let session: CheckoutViewModel.HostedCheckoutSession
+    let isCompleting: Bool
+    let onClose: () -> Void
+    let onCallbackIntercepted: () -> Void
+
+    var body: some View {
+        NavigationStack {
+            ZStack(alignment: .bottom) {
+                HostedCheckoutWebView(
+                    htmlContent: session.htmlContent,
+                    callbackURL: session.callbackURL,
+                    onCallbackIntercepted: onCallbackIntercepted
+                )
+                .ignoresSafeArea(edges: .bottom)
+
+                if isCompleting {
+                    ProgressView("Ödeme sonucu doğrulanıyor...")
+                        .font(.system(size: 14, weight: .bold, design: .rounded))
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 14)
+                        .background(.ultraThinMaterial, in: Capsule())
+                        .padding(.bottom, 24)
+                }
+            }
+            .navigationTitle("Hosted Checkout")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Kapat", action: onClose)
+                }
+            }
+        }
+    }
+}
+
+private struct HostedCheckoutWebView: UIViewRepresentable {
+    let htmlContent: String
+    let callbackURL: URL
+    let onCallbackIntercepted: () -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(callbackURL: callbackURL, onCallbackIntercepted: onCallbackIntercepted)
+    }
+
+    func makeUIView(context: Context) -> WKWebView {
+        let configuration = WKWebViewConfiguration()
+        let webView = WKWebView(frame: .zero, configuration: configuration)
+        webView.navigationDelegate = context.coordinator
+        webView.loadHTMLString(htmlContent, baseURL: nil)
+        webView.scrollView.contentInsetAdjustmentBehavior = .never
+        return webView
+    }
+
+    func updateUIView(_ webView: WKWebView, context: Context) {}
+
+    final class Coordinator: NSObject, WKNavigationDelegate {
+        private let callbackURL: URL
+        private let onCallbackIntercepted: () -> Void
+        private var hasIntercepted = false
+
+        init(callbackURL: URL, onCallbackIntercepted: @escaping () -> Void) {
+            self.callbackURL = callbackURL
+            self.onCallbackIntercepted = onCallbackIntercepted
+        }
+
+        func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+            if !hasIntercepted,
+               let url = navigationAction.request.url,
+               url.scheme == callbackURL.scheme,
+               url.host == callbackURL.host {
+                hasIntercepted = true
+                onCallbackIntercepted()
+                decisionHandler(.cancel)
+                return
+            }
+
+            decisionHandler(.allow)
+        }
+    }
+}
+
+private struct PaymentFlowRow: View {
+    let title: String
+    let detail: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Circle()
+                .fill(AppTheme.orangeSoft)
+                .frame(width: 24, height: 24)
+                .overlay(
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(AppTheme.orange)
+                )
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 14, weight: .bold, design: .rounded))
+                    .foregroundStyle(AppTheme.ink)
+                Text(detail)
+                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .foregroundStyle(AppTheme.subtleText)
+            }
+        }
+    }
+}
+
+private struct PaymentTestHint: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(.system(size: 13, weight: .semibold, design: .monospaced))
+            .foregroundStyle(AppTheme.subtleText)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct PaymentBannerCard: View {
+    let banner: CheckoutViewModel.PaymentBanner
+
+    private var tint: Color {
+        switch banner.style {
+        case .info:
+            return Color.blue
+        case .success:
+            return AppTheme.successGreen
+        case .error:
+            return Color.red
+        }
+    }
+
+    private var symbol: String {
+        switch banner.style {
+        case .info:
+            return "info.circle.fill"
+        case .success:
+            return "checkmark.circle.fill"
+        case .error:
+            return "exclamationmark.triangle.fill"
+        }
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: symbol)
+                .font(.system(size: 20, weight: .bold))
+                .foregroundStyle(tint)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(banner.title)
+                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                    .foregroundStyle(AppTheme.ink)
+                Text(banner.message)
+                    .font(.system(size: 13, weight: .medium, design: .rounded))
+                    .foregroundStyle(AppTheme.subtleText)
+            }
+
+            Spacer()
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(Color.white)
+        )
+    }
+}
+
+private extension CheckoutView {
+    var hostedCheckoutBinding: Binding<CheckoutViewModel.HostedCheckoutSession?> {
+        Binding(
+            get: { checkoutViewModel.hostedCheckoutSession },
+            set: { newValue in
+                if newValue == nil {
+                    checkoutViewModel.dismissHostedCheckout()
+                }
+            }
+        )
     }
 }
 

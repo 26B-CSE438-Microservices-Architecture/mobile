@@ -6,6 +6,7 @@ struct TrendyolGoPrototypeView: View {
     @EnvironmentObject private var tabRouter: TabRouterViewModel
     @State private var isCartPresented = false
     @State private var showLaunchFlow = true
+    @State private var showsReferenceTabBar = true
 
     var body: some View {
         Group {
@@ -15,7 +16,7 @@ struct TrendyolGoPrototypeView: View {
             case .favorites:
                 FavoritesView()
             case .cart:
-                CartFlowView(isPresented: .constant(true))
+                CartFlowView(isPresented: .constant(true), showsReferenceTabBar: $showsReferenceTabBar)
             case .orders:
                 OrdersView()
             case .profile:
@@ -23,7 +24,9 @@ struct TrendyolGoPrototypeView: View {
             }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            ReferenceTabBar()
+            if showsReferenceTabBar {
+                ReferenceTabBar()
+            }
         }
         .fullScreenCover(isPresented: $showLaunchFlow) {
             LaunchFlowView(isPresented: $showLaunchFlow)

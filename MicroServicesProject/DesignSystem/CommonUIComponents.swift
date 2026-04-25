@@ -197,16 +197,22 @@ struct PrimaryActionButton: View {
             HStack {
                 Text(title)
                     .font(.system(size: 16, weight: .bold, design: .rounded))
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                    .layoutPriority(1)
                 Spacer()
                 Text(subtitle)
                     .font(.system(size: 15, weight: .black, design: .rounded))
+                    .fixedSize(horizontal: true, vertical: false)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             .foregroundStyle(.white)
             .padding(.horizontal, 18)
             .padding(.vertical, 16)
             .background(AppTheme.orange, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         }
         .buttonStyle(.plain)
+        .frame(maxWidth: .infinity)
     }
 }
 
