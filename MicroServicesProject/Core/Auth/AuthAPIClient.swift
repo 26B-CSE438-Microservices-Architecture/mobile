@@ -5,6 +5,8 @@ struct AuthAPIClient {
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
 
+    // MARK: - Auth
+
     func login(email: String, password: String) async throws -> AuthSessionSnapshot {
         let response: LoginResponse = try await sendRequest(
             path: "/api/v1/auth/login",
@@ -118,6 +120,8 @@ struct AuthAPIClient {
         return response.message ?? "E-posta doğrulandı."
     }
 
+    // MARK: - User & Address
+
     func createAddress(
         accessToken: String,
         label: String,
@@ -163,6 +167,15 @@ struct AuthAPIClient {
         )
     }
 
+    func registerDevice(accessToken: String, deviceToken: String, platform: String = "ios") async throws {
+        let _: EmptyResponse = try await sendRequest(
+            path: "/api/v1/users/me/device",
+            method: "POST",
+            body: RegisterDeviceRequestBody(device_token: deviceToken, platform: platform),
+            accessToken: accessToken
+        )
+    }
+
     func fetchFavorites(accessToken: String, page: Int = 1, limit: Int = 20) async throws -> FavoritesListResponse {
         try await sendRequest(
             url: makeURL(
@@ -192,6 +205,8 @@ struct AuthAPIClient {
             accessToken: accessToken
         )
     }
+
+    // MARK: - Home Discovery
 
     func fetchHomeDiscover(accessToken: String) async throws -> HomeDiscoverResponse {
         try await sendRequest(
@@ -234,6 +249,8 @@ struct AuthAPIClient {
     func fetchGatewayInfo() async throws -> GatewayInfoResponse {
         try await sendRequest(path: "/info", method: "GET")
     }
+
+    // MARK: - Orders
 
     func fetchOrders(accessToken: String, page: Int = 0, size: Int = 20) async throws -> OrdersListResponse {
         try await sendRequest(
@@ -284,6 +301,8 @@ struct AuthAPIClient {
         return response.message ?? "İade talebi alındı."
     }
 
+    // MARK: - Cart
+
     func fetchCart(accessToken: String) async throws -> CartStateResponse {
         try await sendRequest(
             path: "/api/v1/cart",
@@ -318,6 +337,7 @@ struct AuthAPIClient {
         )
     }
 
+    // NOTE: Currently not used by mobile flow; kept for API parity.
     func clearCart(accessToken: String) async throws {
         let _: EmptyResponse = try await sendRequest(
             path: "/api/v1/cart",

@@ -417,6 +417,7 @@ final class ContentViewModel: ObservableObject {
             Task {
                 do {
                     _ = try await authClient.checkoutCart(accessToken: token)
+                    try? await authClient.clearCart(accessToken: token)
                     await loadCart(accessToken: token)
                     await loadOrders(accessToken: token)
                     await MainActor.run { onTabChange?(.orders) }

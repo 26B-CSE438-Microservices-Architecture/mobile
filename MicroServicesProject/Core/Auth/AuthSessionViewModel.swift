@@ -19,6 +19,7 @@ final class AuthSessionViewModel: ObservableObject {
 
     private let client = AuthAPIClient()
     private let storageKey = "auth.session.snapshot"
+    private let deviceTokenStorageKey = "auth.device.token"
     private var snapshot: AuthSessionSnapshot?
 
     init() {
@@ -41,6 +42,7 @@ final class AuthSessionViewModel: ObservableObject {
             ),
             userProfile: profileResponse.appUserProfile
         )
+        try? await client.registerDevice(accessToken: session.accessToken, deviceToken: resolvedDeviceToken())
         isTokenVerified = (try? await client.verifyToken(token: session.accessToken)) != nil
     }
 
@@ -72,6 +74,7 @@ final class AuthSessionViewModel: ObservableObject {
             ),
             userProfile: profileResponse.appUserProfile
         )
+        try? await client.registerDevice(accessToken: session.accessToken, deviceToken: resolvedDeviceToken())
         isTokenVerified = (try? await client.verifyToken(token: session.accessToken)) != nil
     }
 
@@ -195,10 +198,21 @@ final class AuthSessionViewModel: ObservableObject {
                     user: storedSession.user
                 )
             )
+            try? await client.registerDevice(accessToken: refreshResponse.access_token, deviceToken: resolvedDeviceToken())
             isTokenVerified = (try? await client.verifyToken(token: refreshResponse.access_token)) != nil
         } catch {
             clearSession()
         }
+    }
+
+    private func resolvedDeviceToken() -> String {
+        if let existing = UserDefaults.standard.string(forKey: deviceTokenStorageKey), !existing.isEmpty {
+            return existing
+        }
+
+        let generated = UUID().uuidString
+        UserDefaults.standard.set(generated, forKey: deviceTokenStorageKey)
+        return generated
     }
 
     private func apply(session: AuthSessionSnapshot, userProfile: UserProfile) {

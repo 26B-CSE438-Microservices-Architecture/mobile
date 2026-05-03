@@ -77,6 +77,11 @@ struct VerifyTokenRequestBody: Encodable {
     let token: String
 }
 
+struct RegisterDeviceRequestBody: Encodable {
+    let device_token: String
+    let platform: String
+}
+
 struct AddCartItemRequestBody: Encodable {
     let productId: String
     let quantity: Int
