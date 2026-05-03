@@ -68,6 +68,11 @@ struct CreateAddressRequestBody: Encodable {
     let lng: Double
 }
 
+struct UpdateUserProfileRequestBody: Encodable {
+    let name: String
+    let phone: String
+}
+
 struct CurrentUserProfileResponse: Decodable {
     struct AddressResponse: Decodable {
         let id: String
@@ -132,7 +137,9 @@ private extension CurrentUserProfileResponse.AddressResponse {
             buildingLine: postal.map { "Posta Kodu: \($0)" } ?? "Konum: \(coordinateLine)",
             maskedPhone: contactPhone.maskedPhone,
             showsMapPreview: false,
-            isCurrent: isCurrent
+            isCurrent: isCurrent,
+            latitude: lat,
+            longitude: lng
         )
     }
 }

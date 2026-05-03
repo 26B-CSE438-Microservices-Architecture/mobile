@@ -7,4 +7,8 @@ final class OrderTrackingViewModel: ObservableObject {
     init(order: Order) {
         self.order = order
     }
+
+    func replace(order: Order) {
+        self.order = order
+    }
 }

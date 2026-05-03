@@ -102,13 +102,98 @@ struct AuthAPIClient {
         )
     }
 
+    func updateUserProfile(
+        accessToken: String,
+        name: String,
+        phone: String
+    ) async throws {
+        let _: EmptyResponse = try await sendRequest(
+            path: "/api/v1/users/me",
+            method: "PUT",
+            body: UpdateUserProfileRequestBody(name: name, phone: phone),
+            accessToken: accessToken
+        )
+    }
+
+    func fetchFavorites(accessToken: String, page: Int = 1, limit: Int = 20) async throws -> FavoritesListResponse {
+        try await sendRequest(
+            url: makeURL(
+                path: "/api/v1/users/me/favorites",
+                queryItems: [
+                    URLQueryItem(name: "page", value: String(page)),
+                    URLQueryItem(name: "limit", value: String(limit))
+                ]
+            ),
+            method: "GET",
+            accessToken: accessToken
+        )
+    }
+
+    func addFavorite(accessToken: String, vendorID: String) async throws {
+        let _: EmptyResponse = try await sendRequest(
+            path: "/api/v1/users/me/favorites/\(vendorID)",
+            method: "POST",
+            accessToken: accessToken
+        )
+    }
+
+    func removeFavorite(accessToken: String, vendorID: String) async throws {
+        let _: EmptyResponse = try await sendRequest(
+            path: "/api/v1/users/me/favorites/\(vendorID)",
+            method: "DELETE",
+            accessToken: accessToken
+        )
+    }
+
+    func fetchHomeDiscover(accessToken: String) async throws -> HomeDiscoverResponse {
+        try await sendRequest(
+            path: "/api/v1/home/discover",
+            method: "GET",
+            accessToken: accessToken
+        )
+    }
+
+    func fetchOrders(accessToken: String, page: Int = 0, size: Int = 20) async throws -> OrdersListResponse {
+        try await sendRequest(
+            url: makeURL(
+                path: "/api/v1/orders/my",
+                queryItems: [
+                    URLQueryItem(name: "page", value: String(page)),
+                    URLQueryItem(name: "size", value: String(size))
+                ]
+            ),
+            method: "GET",
+            accessToken: accessToken
+        )
+    }
+
+    func fetchOrderDetail(accessToken: String, id: String) async throws -> OrderDetailResponse {
+        try await sendRequest(
+            path: "/api/v1/orders/\(id)",
+            method: "GET",
+            accessToken: accessToken
+        )
+    }
+
     private func sendRequest<Response: Decodable>(
         path: String,
         method: String,
         accessToken: String? = nil
     ) async throws -> Response {
         try await sendRequest(
-            path: path,
+            url: makeURL(path: path),
+            method: method,
+            accessToken: accessToken
+        )
+    }
+
+    private func sendRequest<Response: Decodable>(
+        url: URL,
+        method: String,
+        accessToken: String? = nil
+    ) async throws -> Response {
+        try await sendRequest(
+            url: url,
             method: method,
             body: Optional<EmptyBody>.none,
             accessToken: accessToken
@@ -121,7 +206,21 @@ struct AuthAPIClient {
         body: Body? = nil,
         accessToken: String? = nil
     ) async throws -> Response {
-        var request = URLRequest(url: baseURL.appendingPathComponent(path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))))
+        try await sendRequest(
+            url: makeURL(path: path),
+            method: method,
+            body: body,
+            accessToken: accessToken
+        )
+    }
+
+    private func sendRequest<Response: Decodable, Body: Encodable>(
+        url: URL,
+        method: String,
+        body: Body? = nil,
+        accessToken: String? = nil
+    ) async throws -> Response {
+        var request = URLRequest(url: url)
         request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Accept")
 
@@ -175,6 +274,17 @@ struct AuthAPIClient {
         }
 
         return HTTPURLResponse.localizedString(forStatusCode: statusCode)
+    }
+
+    private func makeURL(path: String, queryItems: [URLQueryItem] = []) -> URL {
+        let trimmedPath = path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        let base = baseURL.appendingPathComponent(trimmedPath)
+        guard !queryItems.isEmpty,
+              var components = URLComponents(url: base, resolvingAgainstBaseURL: false) else {
+            return base
+        }
+        components.queryItems = queryItems
+        return components.url ?? base
     }
 }
 

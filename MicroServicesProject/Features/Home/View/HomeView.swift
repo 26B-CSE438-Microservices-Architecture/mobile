@@ -8,6 +8,14 @@ struct HomeView: View {
         homeViewModel.activeSearchSuggestion(from: viewModel.homeSearchSuggestions)
     }
 
+    private var liveRestaurants: [Vendor] {
+        viewModel.restaurants
+    }
+
+    private var campaignRestaurants: [Vendor] {
+        liveRestaurants.filter { !$0.promoText.isEmpty && $0.promoText != "Aktif kampanya bilgisi yok" }
+    }
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -16,6 +24,23 @@ struct HomeView: View {
 
                 ScrollView(showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 20) {
+                        if let activeOrder = viewModel.activeOrder {
+                            NavigationLink {
+                                OrderTrackingView(order: activeOrder)
+                            } label: {
+                                ActiveOrderCard(order: activeOrder)
+                                    .padding(.horizontal, 16)
+                            }
+                            .buttonStyle(.plain)
+                        }
+
+                        if let homeErrorMessage = viewModel.homeErrorMessage {
+                            Text(homeErrorMessage)
+                                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                                .foregroundStyle(.red)
+                                .padding(.horizontal, 16)
+                        }
+
                         if !viewModel.isInFoodService {
                             HomePrimaryServiceGrid(cards: viewModel.homePrimaryServices)
                         } else {
@@ -47,32 +72,42 @@ struct HomeView: View {
                         HomeBannerCarousel(banners: viewModel.homeHeroBanners)
                         HomeRewardsCard(rewards: viewModel.homeRewardsOverview)
 
-                        HomeSectionBlock(
-                            title: "Sana Özel Restoranlar",
-                            systemImage: "heart.fill",
-                            iconTint: Color(red: 0.85, green: 0.07, blue: 0.22),
-                            actionTitle: "Tümünü Gör"
-                        ) {
-                            ScrollView(.horizontal, showsIndicators: false) {
-                                HStack(spacing: 12) {
-                                    ForEach(viewModel.homePersonalRestaurants) { card in
-                                        HomeRestaurantSpotlightCard(card: card)
+                        if !liveRestaurants.isEmpty {
+                            HomeSectionBlock(
+                                title: "Canlı Restoranlar",
+                                systemImage: "fork.knife.circle.fill",
+                                iconTint: AppTheme.orange,
+                                actionTitle: "\(liveRestaurants.count) restoran"
+                            ) {
+                                VStack(spacing: 14) {
+                                    ForEach(liveRestaurants) { vendor in
+                                        NavigationLink {
+                                            RestaurantDetailView(vendor: vendor)
+                                        } label: {
+                                            VendorCard(vendor: vendor, compact: false)
+                                        }
+                                        .buttonStyle(.plain)
                                     }
                                 }
                                 .padding(.horizontal, 16)
                             }
                         }
 
-                        HomeSectionBlock(
-                            title: "Kampanyalı Restoranlar",
-                            systemImage: "percent",
-                            iconTint: AppTheme.bannerGold,
-                            actionTitle: "Tümünü Gör"
-                        ) {
-                            ScrollView(.horizontal, showsIndicators: false) {
-                                HStack(spacing: 12) {
-                                    ForEach(viewModel.homeCampaignRestaurants) { card in
-                                        HomeRestaurantSpotlightCard(card: card)
+                        if !campaignRestaurants.isEmpty {
+                            HomeSectionBlock(
+                                title: "Canlı Kampanyalı Restoranlar",
+                                systemImage: "percent",
+                                iconTint: AppTheme.bannerGold,
+                                actionTitle: "\(campaignRestaurants.count) sonuç"
+                            ) {
+                                VStack(spacing: 14) {
+                                    ForEach(campaignRestaurants) { vendor in
+                                        NavigationLink {
+                                            RestaurantDetailView(vendor: vendor)
+                                        } label: {
+                                            VendorCard(vendor: vendor, compact: true)
+                                        }
+                                        .buttonStyle(.plain)
                                     }
                                 }
                                 .padding(.horizontal, 16)

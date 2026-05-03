@@ -2069,6 +2069,7 @@ struct SectionHeader<Destination: View>: View {
 
 struct VendorCard: View {
     @EnvironmentObject private var viewModel: ContentViewModel
+    @EnvironmentObject private var authSession: AuthSessionViewModel
     let vendor: Vendor
     let compact: Bool
 
@@ -2083,7 +2084,9 @@ struct VendorCard: View {
                             TagPill(text: vendor.kind.rawValue, tint: Color.white.opacity(0.18), foreground: .white)
                             Spacer()
                             Button {
-                                viewModel.toggleFavorite(for: vendor)
+                                Task {
+                                    await viewModel.toggleFavorite(for: vendor, accessToken: authSession.accessToken)
+                                }
                             } label: {
                                 Image(systemName: currentVendor.isFavorite ? "heart.fill" : "heart")
                                     .foregroundStyle(.white)

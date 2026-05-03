@@ -2,6 +2,7 @@ import SwiftUI
 
 struct OrdersView: View {
     @EnvironmentObject private var viewModel: ContentViewModel
+    @EnvironmentObject private var authSession: AuthSessionViewModel
     @StateObject private var ordersViewModel = OrdersViewModel()
 
     private var filteredOrders: [Order] {
@@ -83,6 +84,13 @@ struct OrdersView: View {
                             }
                         }
 
+                        if let errorMessage = viewModel.ordersErrorMessage {
+                            Text(errorMessage)
+                                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                                .foregroundStyle(.red)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+
                         if filteredOrders.isEmpty {
                             EmptyStateView(
                                 title: "Sipariş bulunamadı",
@@ -113,6 +121,11 @@ struct OrdersView: View {
                 .background(AppTheme.referenceBackground.ignoresSafeArea())
             }
             .toolbar(.hidden, for: .navigationBar)
+        }
+        .task {
+            if let accessToken = authSession.accessToken {
+                await viewModel.loadOrders(accessToken: accessToken)
+            }
         }
     }
 }

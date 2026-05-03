@@ -23,16 +23,34 @@ private struct EmptyStateCard: View {
 }
 
 struct UserInfoView: View {
+    @EnvironmentObject private var authSession: AuthSessionViewModel
     @EnvironmentObject private var viewModel: ContentViewModel
+    @State private var fullName: String = ""
+    @State private var phone: String = ""
+    @State private var bannerMessage: String?
+    @State private var bannerIsError = false
 
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: 14) {
-                infoCard(title: "Ad Soyad", value: viewModel.userProfile.fullName)
+                editableCard(title: "Ad Soyad", text: $fullName, keyboardType: .default)
                 infoCard(title: "E-posta", value: viewModel.userProfile.email)
-                infoCard(title: "Telefon", value: viewModel.userProfile.phone)
+                editableCard(title: "Telefon", text: $phone, keyboardType: .phonePad)
                 infoCard(title: "Durum", value: viewModel.userProfile.isActive ? "Aktif" : "Pasif")
                 infoCard(title: "Kayıtlı Adres", value: "\(viewModel.userProfile.addresses.count)")
+
+                if let bannerMessage {
+                    statusCard(message: bannerMessage, isError: bannerIsError)
+                }
+
+                PrimaryActionButton(
+                    title: authSession.isSubmitting ? "Kaydediliyor..." : "Bilgileri Kaydet",
+                    subtitle: "users/me"
+                ) {
+                    submit()
+                }
+                .disabled(authSession.isSubmitting)
+                .opacity(authSession.isSubmitting ? 0.7 : 1)
             }
             .padding(16)
             .padding(.bottom, 24)
@@ -40,6 +58,10 @@ struct UserInfoView: View {
         .background(AppTheme.canvas.ignoresSafeArea())
         .navigationTitle("Kullanıcı Bilgilerim")
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            fullName = viewModel.userProfile.fullName
+            phone = viewModel.userProfile.phone
+        }
     }
 
     private func infoCard(title: String, value: String) -> some View {
@@ -58,6 +80,73 @@ struct UserInfoView: View {
             RoundedRectangle(cornerRadius: 22, style: .continuous)
                 .fill(Color.white)
         )
+    }
+
+    private func editableCard(title: String, text: Binding<String>, keyboardType: UIKeyboardType) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.system(size: 13, weight: .bold, design: .rounded))
+                .foregroundStyle(AppTheme.subtleText)
+
+            TextField("", text: text)
+                .keyboardType(keyboardType)
+                .textInputAutocapitalization(keyboardType == .default ? .words : .never)
+                .autocorrectionDisabled()
+                .padding(16)
+                .background(
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .fill(Color.white)
+                )
+        }
+    }
+
+    private func statusCard(message: String, isError: Bool) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: isError ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
+                .foregroundStyle(isError ? .red : AppTheme.successGreen)
+            Text(message)
+                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                .foregroundStyle(AppTheme.ink)
+            Spacer()
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(Color.white)
+        )
+    }
+
+    private func submit() {
+        bannerMessage = nil
+
+        let trimmedName = fullName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedPhone = phone.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !trimmedName.isEmpty else {
+            bannerIsError = true
+            bannerMessage = "Ad Soyad boş bırakılamaz."
+            return
+        }
+
+        guard !trimmedPhone.isEmpty else {
+            bannerIsError = true
+            bannerMessage = "Telefon boş bırakılamaz."
+            return
+        }
+
+        Task {
+            do {
+                try await authSession.updateUserProfile(name: trimmedName, phone: trimmedPhone)
+                fullName = authSession.userProfile?.fullName ?? trimmedName
+                phone = authSession.userProfile?.phone ?? trimmedPhone
+                bannerIsError = false
+                bannerMessage = "Kullanıcı bilgileri güncellendi."
+            } catch {
+                bannerIsError = true
+                bannerMessage = error.localizedDescription
+            }
+        }
     }
 }
 

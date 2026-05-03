@@ -1,9 +1,8 @@
 import SwiftUI
-import Combine
 
 struct FavoritesView: View {
     @EnvironmentObject private var viewModel: ContentViewModel
-    @StateObject private var favoritesViewModel = FavoritesViewModel()
+    @EnvironmentObject private var authSession: AuthSessionViewModel
 
     var body: some View {
         NavigationStack {
@@ -12,7 +11,13 @@ struct FavoritesView: View {
 
                 ScrollView(showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 16) {
-                        if favoritesViewModel.favorites.isEmpty {
+                        if let errorMessage = viewModel.favoritesErrorMessage {
+                            Text(errorMessage)
+                                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                                .foregroundStyle(.red)
+                        }
+
+                        if viewModel.favoriteVendors.isEmpty {
                             EmptyStateView(
                                 title: "Henüz favorin yok",
                                 subtitle: "Kalp ikonuna basarak mağazaları burada toplayabilirsin.",
@@ -20,7 +25,7 @@ struct FavoritesView: View {
                             )
                             .padding(.top, 80)
                         } else {
-                            ForEach(favoritesViewModel.favorites) { vendor in
+                            ForEach(viewModel.favoriteVendors) { vendor in
                                 NavigationLink {
                                     RestaurantDetailView(vendor: vendor)
                                 } label: {
@@ -37,11 +42,10 @@ struct FavoritesView: View {
             }
             .toolbar(.hidden, for: .navigationBar)
         }
-        .onAppear {
-            favoritesViewModel.refresh(from: viewModel.favoriteVendors)
-        }
-        .onReceive(viewModel.objectWillChange) { _ in
-            favoritesViewModel.refresh(from: viewModel.favoriteVendors)
+        .task {
+            if let accessToken = authSession.accessToken {
+                await viewModel.loadFavorites(accessToken: accessToken)
+            }
         }
     }
 }

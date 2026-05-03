@@ -387,6 +387,8 @@ private extension CheckoutView {
 }
 
 struct OrderTrackingView: View {
+    @EnvironmentObject private var viewModel: ContentViewModel
+    @EnvironmentObject private var authSession: AuthSessionViewModel
     @StateObject private var orderTrackingViewModel: OrderTrackingViewModel
 
     init(order: Order) {
@@ -539,5 +541,12 @@ struct OrderTrackingView: View {
         .background(AppTheme.canvas.ignoresSafeArea())
         .navigationTitle("Sipariş Takibi")
         .navigationBarTitleDisplayMode(.inline)
+        .task {
+            let detailedOrder = await viewModel.refreshOrderDetailIfNeeded(
+                for: orderTrackingViewModel.order,
+                accessToken: authSession.accessToken
+            )
+            orderTrackingViewModel.replace(order: detailedOrder)
+        }
     }
 }

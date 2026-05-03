@@ -50,6 +50,7 @@ struct OptionGroup: Identifiable, Hashable {
 
 struct Product: Identifiable, Hashable {
     let id = UUID()
+    let backendID: String?
     let name: String
     let description: String
     let price: Double
@@ -57,16 +58,48 @@ struct Product: Identifiable, Hashable {
     let systemImage: String
     let theme: VendorTheme
     let optionGroups: [OptionGroup]
+
+    init(
+        backendID: String? = nil,
+        name: String,
+        description: String,
+        price: Double,
+        badge: String?,
+        systemImage: String,
+        theme: VendorTheme,
+        optionGroups: [OptionGroup]
+    ) {
+        self.backendID = backendID
+        self.name = name
+        self.description = description
+        self.price = price
+        self.badge = badge
+        self.systemImage = systemImage
+        self.theme = theme
+        self.optionGroups = optionGroups
+    }
 }
 
 struct MenuSection: Identifiable, Hashable {
     let id = UUID()
+    let backendID: String?
     let title: String
     let products: [Product]
+
+    init(
+        backendID: String? = nil,
+        title: String,
+        products: [Product]
+    ) {
+        self.backendID = backendID
+        self.title = title
+        self.products = products
+    }
 }
 
 struct Vendor: Identifiable, Hashable {
     let id = UUID()
+    let backendID: String?
     let name: String
     let summary: String
     let kind: VendorKind
@@ -81,6 +114,40 @@ struct Vendor: Identifiable, Hashable {
     let theme: VendorTheme
     var isFavorite: Bool
     let menuSections: [MenuSection]
+
+    init(
+        backendID: String? = nil,
+        name: String,
+        summary: String,
+        kind: VendorKind,
+        eta: String,
+        rating: Double,
+        reviewCount: Int,
+        minimumBasket: Double,
+        deliveryFee: Double,
+        coverNote: String,
+        promoText: String,
+        tags: [String],
+        theme: VendorTheme,
+        isFavorite: Bool,
+        menuSections: [MenuSection]
+    ) {
+        self.backendID = backendID
+        self.name = name
+        self.summary = summary
+        self.kind = kind
+        self.eta = eta
+        self.rating = rating
+        self.reviewCount = reviewCount
+        self.minimumBasket = minimumBasket
+        self.deliveryFee = deliveryFee
+        self.coverNote = coverNote
+        self.promoText = promoText
+        self.tags = tags
+        self.theme = theme
+        self.isFavorite = isFavorite
+        self.menuSections = menuSections
+    }
 }
 
 struct CartItem: Identifiable, Hashable {
@@ -121,6 +188,7 @@ enum OrderThumbnailKind: String, Hashable {
 
 struct Order: Identifiable, Hashable {
     let id = UUID()
+    let backendID: String?
     let vendorName: String
     let items: [CartItem]
     let total: Double
@@ -140,6 +208,7 @@ struct Order: Identifiable, Hashable {
     let previewThumbnails: [OrderThumbnailKind]
 
     init(
+        backendID: String? = nil,
         vendorName: String,
         items: [CartItem],
         total: Double,
@@ -158,6 +227,7 @@ struct Order: Identifiable, Hashable {
         showsRatingAction: Bool = false,
         previewThumbnails: [OrderThumbnailKind] = []
     ) {
+        self.backendID = backendID
         self.vendorName = vendorName
         self.items = items
         self.total = total
@@ -188,6 +258,8 @@ struct Address: Identifiable, Hashable {
     let maskedPhone: String
     let showsMapPreview: Bool
     let isCurrent: Bool
+    let latitude: Double?
+    let longitude: Double?
 
     init(
         id: String = UUID().uuidString,
@@ -198,7 +270,9 @@ struct Address: Identifiable, Hashable {
         buildingLine: String,
         maskedPhone: String,
         showsMapPreview: Bool,
-        isCurrent: Bool
+        isCurrent: Bool,
+        latitude: Double? = nil,
+        longitude: Double? = nil
     ) {
         self.id = id
         self.title = title
@@ -209,6 +283,8 @@ struct Address: Identifiable, Hashable {
         self.maskedPhone = maskedPhone
         self.showsMapPreview = showsMapPreview
         self.isCurrent = isCurrent
+        self.latitude = latitude
+        self.longitude = longitude
     }
 }
 

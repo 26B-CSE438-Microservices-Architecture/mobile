@@ -12,6 +12,10 @@ final class AuthSessionViewModel: ObservableObject {
         snapshot != nil
     }
 
+    var accessToken: String? {
+        snapshot?.accessToken
+    }
+
     private let client = AuthAPIClient()
     private let storageKey = "auth.session.snapshot"
     private var snapshot: AuthSessionSnapshot?
@@ -124,6 +128,23 @@ final class AuthSessionViewModel: ObservableObject {
         defer { isSubmitting = false }
 
         try await client.deleteAddress(accessToken: snapshot.accessToken, id: id)
+        try await refreshUserProfile(using: snapshot)
+    }
+
+    func updateUserProfile(name: String, phone: String) async throws {
+        guard let snapshot else {
+            throw AppAuthError(message: "Oturum bulunamadı.")
+        }
+
+        isSubmitting = true
+        defer { isSubmitting = false }
+
+        try await client.updateUserProfile(
+            accessToken: snapshot.accessToken,
+            name: name,
+            phone: phone
+        )
+
         try await refreshUserProfile(using: snapshot)
     }
 

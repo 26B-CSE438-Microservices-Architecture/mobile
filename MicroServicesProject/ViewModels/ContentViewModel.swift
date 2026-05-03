@@ -8,15 +8,19 @@ final class ContentViewModel: ObservableObject {
     @Published var pastOrders: [Order]
     @Published var cartItems: [CartItem]
     @Published var userProfile: UserProfile
+    @Published var homeSearchSuggestions: [String]
+    @Published var homePrimaryServices: [HomePrimaryService]
+    @Published var homeMiniServices: [HomeMiniService]
+    @Published var homeHeroBanners: [HomeHeroBanner]
+    @Published private(set) var isLoadingRemoteRestaurants = false
+    @Published private(set) var homeErrorMessage: String?
+    @Published private(set) var favoritesErrorMessage: String?
+    @Published private(set) var ordersErrorMessage: String?
 
     let shortcuts: [CategoryShortcut]
     let campaigns: [Campaign]
-    let homeSearchSuggestions: [String]
-    let homePrimaryServices: [HomePrimaryService]
-    let homeMiniServices: [HomeMiniService]
     let homeCuisines: [HomeCuisine]
     let homeQuickFilters: [HomeQuickFilter]
-    let homeHeroBanners: [HomeHeroBanner]
     let homeRewardsOverview: HomeRewardsOverview
     let homePersonalRestaurants: [HomeRestaurantSpotlight]
     let homeCampaignRestaurants: [HomeRestaurantSpotlight]
@@ -25,7 +29,12 @@ final class ContentViewModel: ObservableObject {
 
     var onTabChange: ((AppTab) -> Void)?
     private let repository: AppRepository
+    private let vendorsClient = VendorsAPIClient()
+    private let authClient = AuthAPIClient()
     private var usesRemoteUserProfile = false
+    private var usesRemoteRestaurants = false
+    private var usesRemoteHomeDiscover = false
+    private var usesRemoteOrders = false
 
     @Published var isInFoodService: Bool = false {
         didSet {
@@ -144,6 +153,106 @@ final class ContentViewModel: ObservableObject {
         selectedAddress = repository.selectedAddress
     }
 
+    func loadRemoteRestaurants() async {
+        isLoadingRemoteRestaurants = true
+        defer { isLoadingRemoteRestaurants = false }
+
+        do {
+            let remoteRestaurants = try await vendorsClient.fetchVendors(page: 1, limit: 20)
+            if !remoteRestaurants.isEmpty {
+                usesRemoteRestaurants = true
+                restaurants = remoteRestaurants
+            }
+        } catch {
+            // Keep mock restaurant data if the live endpoint fails.
+        }
+    }
+
+    func loadHomeDiscover(accessToken: String) async {
+        homeErrorMessage = nil
+
+        do {
+            let response = try await authClient.fetchHomeDiscover(accessToken: accessToken)
+            usesRemoteHomeDiscover = true
+            if !response.hero_banners.isEmpty {
+                homeHeroBanners = response.hero_banners.enumerated().map { index, banner in
+                    banner.appBanner(index: index)
+                }
+            }
+            if !response.primary_categories.isEmpty {
+                homePrimaryServices = response.primary_categories.map { $0.appPrimaryService() }
+            }
+            if !response.mini_services.isEmpty {
+                homeMiniServices = response.mini_services.map { $0.appMiniService() }
+            }
+            mergeRemoteVendors(response.featured_vendors.map(\.appVendor))
+        } catch {
+            homeErrorMessage = error.localizedDescription
+        }
+    }
+
+    func loadFavorites(accessToken: String) async {
+        favoritesErrorMessage = nil
+
+        do {
+            let response = try await authClient.fetchFavorites(accessToken: accessToken)
+            let favoriteVendors = response.data.map(\.appVendor)
+            mergeRemoteVendors(favoriteVendors)
+            applyFavoriteVendorIDs(Set(response.data.map(\.vendor_id)))
+        } catch {
+            favoritesErrorMessage = error.localizedDescription
+        }
+    }
+
+    func loadOrders(accessToken: String) async {
+        ordersErrorMessage = nil
+
+        do {
+            let response = try await authClient.fetchOrders(accessToken: accessToken)
+            usesRemoteOrders = true
+            let mappedOrders = response.data.map(\.appOrder)
+            activeOrder = mappedOrders.first(where: \.isActive)
+            pastOrders = mappedOrders.filter { !$0.isActive }
+        } catch {
+            ordersErrorMessage = error.localizedDescription
+        }
+    }
+
+    func refreshVendorDetailIfNeeded(for vendor: Vendor) async -> Vendor {
+        guard vendor.menuSections.isEmpty, let backendID = vendor.backendID else {
+            return vendor
+        }
+
+        do {
+            let detailedVendor = try await vendorsClient.fetchVendorDetail(vendorID: backendID)
+            if let index = restaurants.firstIndex(where: { $0.id == vendor.id }) {
+                restaurants[index] = detailedVendor
+            }
+            return detailedVendor
+        } catch {
+            return vendor
+        }
+    }
+
+    func refreshOrderDetailIfNeeded(for order: Order, accessToken: String?) async -> Order {
+        guard let accessToken, let backendID = order.backendID else {
+            return order
+        }
+
+        do {
+            let detail = try await authClient.fetchOrderDetail(accessToken: accessToken, id: backendID)
+            let detailedOrder = detail.merged(into: order)
+            if let index = pastOrders.firstIndex(where: { $0.id == order.id }) {
+                pastOrders[index] = detailedOrder
+            } else if activeOrder?.id == order.id {
+                activeOrder = detailedOrder
+            }
+            return detailedOrder
+        } catch {
+            return order
+        }
+    }
+
     func addToCart(product: Product, from vendor: Vendor, selectedOptions: [String] = [], note: String = "", quantity: Int = 1) {
         repository.addToCart(
             product: product,
@@ -165,9 +274,28 @@ final class ContentViewModel: ObservableObject {
         refreshState()
     }
 
-    func toggleFavorite(for vendor: Vendor) {
-        repository.toggleFavorite(for: vendor)
-        refreshState()
+    func toggleFavorite(for vendor: Vendor, accessToken: String?) async {
+        guard let backendID = vendor.backendID, let accessToken else {
+            repository.toggleFavorite(for: vendor)
+            refreshState()
+            return
+        }
+
+        let currentIsFavorite = allVendors.first(where: { $0.id == vendor.id })?.isFavorite ?? vendor.isFavorite
+        setFavoriteState(forBackendID: backendID, isFavorite: !currentIsFavorite)
+        favoritesErrorMessage = nil
+
+        do {
+            if currentIsFavorite {
+                try await authClient.removeFavorite(accessToken: accessToken, vendorID: backendID)
+            } else {
+                try await authClient.addFavorite(accessToken: accessToken, vendorID: backendID)
+            }
+            await loadFavorites(accessToken: accessToken)
+        } catch {
+            setFavoriteState(forBackendID: backendID, isFavorite: currentIsFavorite)
+            favoritesErrorMessage = error.localizedDescription
+        }
     }
 
     func reorder(_ order: Order) {
@@ -189,14 +317,100 @@ final class ContentViewModel: ObservableObject {
     }
 
     private func refreshState() {
-        restaurants = repository.restaurants
+        if !usesRemoteRestaurants {
+            restaurants = repository.restaurants
+        }
         markets = repository.markets
-        activeOrder = repository.activeOrder
-        pastOrders = repository.pastOrders
+        if !usesRemoteHomeDiscover {
+            activeOrder = repository.activeOrder
+        }
+        if !usesRemoteOrders {
+            pastOrders = repository.pastOrders
+        }
         cartItems = repository.cartItems
         if !usesRemoteUserProfile {
             selectedAddress = repository.selectedAddress
             userProfile = repository.userProfile
+        }
+    }
+
+    private func mergeRemoteVendors(_ incoming: [Vendor]) {
+        guard !incoming.isEmpty else { return }
+
+        var updatedRestaurants = restaurants
+
+        for vendor in incoming {
+            if let backendID = vendor.backendID,
+               let index = updatedRestaurants.firstIndex(where: { $0.backendID == backendID }) {
+                let existing = updatedRestaurants[index]
+                updatedRestaurants[index] = Vendor(
+                    backendID: existing.backendID ?? vendor.backendID,
+                    name: vendor.name,
+                    summary: vendor.summary,
+                    kind: vendor.kind,
+                    eta: vendor.eta,
+                    rating: vendor.rating == 0 ? existing.rating : vendor.rating,
+                    reviewCount: vendor.reviewCount == 0 ? existing.reviewCount : vendor.reviewCount,
+                    minimumBasket: existing.minimumBasket,
+                    deliveryFee: vendor.deliveryFee == 0 ? existing.deliveryFee : vendor.deliveryFee,
+                    coverNote: vendor.coverNote,
+                    promoText: vendor.promoText,
+                    tags: vendor.tags.isEmpty ? existing.tags : vendor.tags,
+                    theme: existing.theme,
+                    isFavorite: existing.isFavorite,
+                    menuSections: existing.menuSections.isEmpty ? vendor.menuSections : existing.menuSections
+                )
+            } else {
+                updatedRestaurants.append(vendor)
+            }
+        }
+
+        restaurants = updatedRestaurants
+    }
+
+    private func applyFavoriteVendorIDs(_ ids: Set<String>) {
+        restaurants = restaurants.map { vendor in
+            guard let backendID = vendor.backendID else { return vendor }
+            return Vendor(
+                backendID: vendor.backendID,
+                name: vendor.name,
+                summary: vendor.summary,
+                kind: vendor.kind,
+                eta: vendor.eta,
+                rating: vendor.rating,
+                reviewCount: vendor.reviewCount,
+                minimumBasket: vendor.minimumBasket,
+                deliveryFee: vendor.deliveryFee,
+                coverNote: vendor.coverNote,
+                promoText: vendor.promoText,
+                tags: vendor.tags,
+                theme: vendor.theme,
+                isFavorite: ids.contains(backendID),
+                menuSections: vendor.menuSections
+            )
+        }
+    }
+
+    private func setFavoriteState(forBackendID backendID: String, isFavorite: Bool) {
+        restaurants = restaurants.map { vendor in
+            guard vendor.backendID == backendID else { return vendor }
+            return Vendor(
+                backendID: vendor.backendID,
+                name: vendor.name,
+                summary: vendor.summary,
+                kind: vendor.kind,
+                eta: vendor.eta,
+                rating: vendor.rating,
+                reviewCount: vendor.reviewCount,
+                minimumBasket: vendor.minimumBasket,
+                deliveryFee: vendor.deliveryFee,
+                coverNote: vendor.coverNote,
+                promoText: vendor.promoText,
+                tags: vendor.tags,
+                theme: vendor.theme,
+                isFavorite: isFavorite,
+                menuSections: vendor.menuSections
+            )
         }
     }
 }

@@ -29,10 +29,25 @@ struct ContentView: View {
             viewModel.onTabChange = { tab in
                 tabRouter.selectTab(tab)
             }
+            Task {
+                await viewModel.loadRemoteRestaurants()
+                if let accessToken = authSession.accessToken {
+                    await viewModel.loadHomeDiscover(accessToken: accessToken)
+                    await viewModel.loadFavorites(accessToken: accessToken)
+                    await viewModel.loadOrders(accessToken: accessToken)
+                }
+            }
         }
         .onReceive(authSession.$userProfile) { profile in
             if let profile {
                 viewModel.applyRemoteUserProfile(profile)
+                if let accessToken = authSession.accessToken {
+                    Task {
+                        await viewModel.loadHomeDiscover(accessToken: accessToken)
+                        await viewModel.loadFavorites(accessToken: accessToken)
+                        await viewModel.loadOrders(accessToken: accessToken)
+                    }
+                }
             } else {
                 viewModel.resetUserProfileToRepository()
             }

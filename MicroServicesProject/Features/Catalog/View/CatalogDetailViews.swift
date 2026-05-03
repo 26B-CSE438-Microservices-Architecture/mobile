@@ -34,30 +34,37 @@ struct SimpleAccountView: View {
 
 struct RestaurantDetailView: View {
     @EnvironmentObject private var viewModel: ContentViewModel
+    @EnvironmentObject private var authSession: AuthSessionViewModel
     let vendor: Vendor
     @State private var selectedProduct: Product?
+    @State private var resolvedVendor: Vendor
+
+    init(vendor: Vendor) {
+        self.vendor = vendor
+        _resolvedVendor = State(initialValue: vendor)
+    }
 
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 18) {
-                VendorHero(vendor: vendor)
+                VendorHero(vendor: resolvedVendor)
 
                 VStack(alignment: .leading, spacing: 10) {
                     HStack {
-                        Label(vendor.eta, systemImage: "clock.fill")
+                        Label(resolvedVendor.eta, systemImage: "clock.fill")
                         Spacer()
-                        Label("\(vendor.rating, specifier: "%.1f")", systemImage: "star.fill")
+                        Label("\(resolvedVendor.rating, specifier: "%.1f")", systemImage: "star.fill")
                     }
                     .font(.system(size: 14, weight: .semibold, design: .rounded))
                     .foregroundStyle(AppTheme.subtleText)
 
-                    Text(vendor.promoText)
+                    Text(resolvedVendor.promoText)
                         .font(.system(size: 15, weight: .semibold, design: .rounded))
                         .foregroundStyle(AppTheme.ink)
 
                     HStack(spacing: 8) {
-                        ForEach(vendor.tags, id: \.self) { tag in
-                            TagPill(text: tag, tint: vendor.theme.softTint)
+                        ForEach(resolvedVendor.tags, id: \.self) { tag in
+                            TagPill(text: tag, tint: resolvedVendor.theme.softTint)
                         }
                     }
                 }
@@ -67,7 +74,7 @@ struct RestaurantDetailView: View {
                         .fill(Color.white)
                 )
 
-                ForEach(vendor.menuSections) { section in
+                ForEach(resolvedVendor.menuSections) { section in
                     VStack(alignment: .leading, spacing: 12) {
                         Text(section.title)
                             .font(.system(size: 22, weight: .bold, design: .rounded))
@@ -75,11 +82,11 @@ struct RestaurantDetailView: View {
 
                         ForEach(section.products) { product in
                             ProductRow(
-                                vendor: vendor,
+                                vendor: resolvedVendor,
                                 product: product,
                                 onSelect: { selectedProduct = product },
                                 onQuickAdd: {
-                                    viewModel.addToCart(product: product, from: vendor)
+                                    viewModel.addToCart(product: product, from: resolvedVendor)
                                 }
                             )
                         }
@@ -90,12 +97,14 @@ struct RestaurantDetailView: View {
             .padding(.bottom, 32)
         }
         .background(AppTheme.canvas.ignoresSafeArea())
-        .navigationTitle(vendor.name)
+        .navigationTitle(resolvedVendor.name)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
-                    viewModel.toggleFavorite(for: vendor)
+                    Task {
+                        await viewModel.toggleFavorite(for: resolvedVendor, accessToken: authSession.accessToken)
+                    }
                 } label: {
                     Image(systemName: currentVendorState.isFavorite ? "heart.fill" : "heart")
                         .foregroundStyle(AppTheme.orange)
@@ -103,14 +112,17 @@ struct RestaurantDetailView: View {
             }
         }
         .sheet(item: $selectedProduct) { product in
-            ProductDetailSheet(vendor: vendor, product: product)
+            ProductDetailSheet(vendor: resolvedVendor, product: product)
                 .presentationDetents([.fraction(0.92)])
                 .environmentObject(viewModel)
+        }
+        .task {
+            resolvedVendor = await viewModel.refreshVendorDetailIfNeeded(for: vendor)
         }
     }
 
     private var currentVendorState: Vendor {
-        viewModel.allVendors.first(where: { $0.id == vendor.id }) ?? vendor
+        viewModel.allVendors.first(where: { $0.id == resolvedVendor.id }) ?? resolvedVendor
     }
 }
 
