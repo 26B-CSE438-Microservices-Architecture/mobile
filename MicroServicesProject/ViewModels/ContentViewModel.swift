@@ -7,10 +7,10 @@ final class ContentViewModel: ObservableObject {
     @Published var activeOrder: Order?
     @Published var pastOrders: [Order]
     @Published var cartItems: [CartItem]
+    @Published var userProfile: UserProfile
 
     let shortcuts: [CategoryShortcut]
     let campaigns: [Campaign]
-    let userProfile: UserProfile
     let homeSearchSuggestions: [String]
     let homePrimaryServices: [HomePrimaryService]
     let homeMiniServices: [HomeMiniService]
@@ -25,6 +25,7 @@ final class ContentViewModel: ObservableObject {
 
     var onTabChange: ((AppTab) -> Void)?
     private let repository: AppRepository
+    private var usesRemoteUserProfile = false
 
     @Published var isInFoodService: Bool = false {
         didSet {
@@ -115,9 +116,32 @@ final class ContentViewModel: ObservableObject {
     }
 
     func selectAddress(_ address: Address) {
+        if usesRemoteUserProfile {
+            selectedAddress = address
+            onTabChange?(.home)
+            return
+        }
+
         repository.selectAddress(address)
         refreshState()
         onTabChange?(.home)
+    }
+
+    func applyRemoteUserProfile(_ profile: UserProfile) {
+        usesRemoteUserProfile = true
+        userProfile = profile
+
+        if let matchingAddress = profile.addresses.first(where: { $0.id == selectedAddress.id }) {
+            selectedAddress = matchingAddress
+        } else if let firstAddress = profile.addresses.first {
+            selectedAddress = firstAddress
+        }
+    }
+
+    func resetUserProfileToRepository() {
+        usesRemoteUserProfile = false
+        userProfile = repository.userProfile
+        selectedAddress = repository.selectedAddress
     }
 
     func addToCart(product: Product, from vendor: Vendor, selectedOptions: [String] = [], note: String = "", quantity: Int = 1) {
@@ -170,6 +194,9 @@ final class ContentViewModel: ObservableObject {
         activeOrder = repository.activeOrder
         pastOrders = repository.pastOrders
         cartItems = repository.cartItems
-        selectedAddress = repository.selectedAddress
+        if !usesRemoteUserProfile {
+            selectedAddress = repository.selectedAddress
+            userProfile = repository.userProfile
+        }
     }
 }

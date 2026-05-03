@@ -179,7 +179,7 @@ struct Order: Identifiable, Hashable {
 }
 
 struct Address: Identifiable, Hashable {
-    let id = UUID()
+    let id: String
     let title: String
     let line1: String
     let detail: String
@@ -188,6 +188,28 @@ struct Address: Identifiable, Hashable {
     let maskedPhone: String
     let showsMapPreview: Bool
     let isCurrent: Bool
+
+    init(
+        id: String = UUID().uuidString,
+        title: String,
+        line1: String,
+        detail: String,
+        regionLine: String,
+        buildingLine: String,
+        maskedPhone: String,
+        showsMapPreview: Bool,
+        isCurrent: Bool
+    ) {
+        self.id = id
+        self.title = title
+        self.line1 = line1
+        self.detail = detail
+        self.regionLine = regionLine
+        self.buildingLine = buildingLine
+        self.maskedPhone = maskedPhone
+        self.showsMapPreview = showsMapPreview
+        self.isCurrent = isCurrent
+    }
 }
 
 struct PaymentMethod: Identifiable, Hashable {
@@ -331,6 +353,30 @@ struct UserProfile: Hashable {
     let loyaltyPoints: Int
     let addresses: [Address]
     let paymentMethods: [PaymentMethod]
+    let role: String
+    let isActive: Bool
+
+    init(
+        fullName: String,
+        email: String,
+        phone: String,
+        walletBalance: Double,
+        loyaltyPoints: Int,
+        addresses: [Address],
+        paymentMethods: [PaymentMethod],
+        role: String = "Customer",
+        isActive: Bool = true
+    ) {
+        self.fullName = fullName
+        self.email = email
+        self.phone = phone
+        self.walletBalance = walletBalance
+        self.loyaltyPoints = loyaltyPoints
+        self.addresses = addresses
+        self.paymentMethods = paymentMethods
+        self.role = role
+        self.isActive = isActive
+    }
 }
 
 enum MockData {

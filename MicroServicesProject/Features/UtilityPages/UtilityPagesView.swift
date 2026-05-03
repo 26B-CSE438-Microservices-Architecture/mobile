@@ -1,5 +1,66 @@
 import SwiftUI
 
+private struct EmptyStateCard: View {
+    let title: String
+    let message: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(title)
+                .font(.system(size: 18, weight: .bold, design: .rounded))
+                .foregroundStyle(AppTheme.ink)
+            Text(message)
+                .font(.system(size: 14, weight: .medium, design: .rounded))
+                .foregroundStyle(AppTheme.subtleText)
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(Color.white)
+        )
+    }
+}
+
+struct UserInfoView: View {
+    @EnvironmentObject private var viewModel: ContentViewModel
+
+    var body: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(spacing: 14) {
+                infoCard(title: "Ad Soyad", value: viewModel.userProfile.fullName)
+                infoCard(title: "E-posta", value: viewModel.userProfile.email)
+                infoCard(title: "Telefon", value: viewModel.userProfile.phone)
+                infoCard(title: "Durum", value: viewModel.userProfile.isActive ? "Aktif" : "Pasif")
+                infoCard(title: "Kayıtlı Adres", value: "\(viewModel.userProfile.addresses.count)")
+            }
+            .padding(16)
+            .padding(.bottom, 24)
+        }
+        .background(AppTheme.canvas.ignoresSafeArea())
+        .navigationTitle("Kullanıcı Bilgilerim")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func infoCard(title: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.system(size: 13, weight: .bold, design: .rounded))
+                .foregroundStyle(AppTheme.subtleText)
+
+            Text(value.isEmpty ? "-" : value)
+                .font(.system(size: 18, weight: .bold, design: .rounded))
+                .foregroundStyle(AppTheme.ink)
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(Color.white)
+        )
+    }
+}
+
 struct CampaignsView: View {
     @EnvironmentObject private var viewModel: ContentViewModel
 
@@ -51,34 +112,54 @@ struct CampaignsView: View {
 }
 
 struct AddressListView: View {
+    @EnvironmentObject private var authSession: AuthSessionViewModel
     @EnvironmentObject private var viewModel: ContentViewModel
+    @State private var isShowingAddSheet = false
+    @State private var addressPendingDelete: Address?
+    @State private var errorMessage: String?
 
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: 14) {
-                ForEach(viewModel.userProfile.addresses) { address in
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Text(address.title)
-                                .font(.system(size: 18, weight: .bold, design: .rounded))
-                                .foregroundStyle(AppTheme.ink)
-                            Spacer()
-                            if viewModel.selectedAddress.id == address.id {
-                                TagPill(text: "Aktif", tint: AppTheme.orangeSoft)
+                if viewModel.userProfile.addresses.isEmpty {
+                    EmptyStateCard(
+                        title: "Kayıtlı adres bulunamadı",
+                        message: "Kullanıcı servisi şu an adres döndürmüyor veya bu hesapta kayıtlı adres yok."
+                    )
+                } else {
+                    ForEach(viewModel.userProfile.addresses) { address in
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Text(address.title)
+                                    .font(.system(size: 18, weight: .bold, design: .rounded))
+                                    .foregroundStyle(AppTheme.ink)
+                                Spacer()
+                                if viewModel.selectedAddress.id == address.id {
+                                    TagPill(text: "Aktif", tint: AppTheme.orangeSoft)
+                                }
+                            }
+
+                            Text(address.regionLine)
+                            Text(address.line1)
+                            Text(address.buildingLine)
+                            HStack {
+                                Spacer()
+                                Button("Sil") {
+                                    addressPendingDelete = address
+                                }
+                                .font(.system(size: 13, weight: .bold, design: .rounded))
+                                .foregroundStyle(.red)
                             }
                         }
-                        Text(address.regionLine)
-                        Text(address.line1)
-                        Text(address.buildingLine)
+                        .font(.system(size: 14, weight: .medium, design: .rounded))
+                        .foregroundStyle(AppTheme.subtleText)
+                        .padding(18)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(
+                            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                                .fill(Color.white)
+                        )
                     }
-                    .font(.system(size: 14, weight: .medium, design: .rounded))
-                    .foregroundStyle(AppTheme.subtleText)
-                    .padding(18)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(
-                        RoundedRectangle(cornerRadius: 22, style: .continuous)
-                            .fill(Color.white)
-                    )
                 }
             }
             .padding(16)
@@ -87,6 +168,70 @@ struct AddressListView: View {
         .background(AppTheme.canvas.ignoresSafeArea())
         .navigationTitle("Adreslerim")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    isShowingAddSheet = true
+                } label: {
+                    Image(systemName: "plus")
+                        .foregroundStyle(AppTheme.orange)
+                }
+            }
+        }
+        .sheet(isPresented: $isShowingAddSheet) {
+            AddressEditorSheet(prefillWithCurrentLocation: false) { draft in
+                do {
+                    guard let lat = draft.latitudeValue, let lng = draft.longitudeValue else {
+                        throw AppAuthError(message: "Koordinatlar sayısal olmalı.")
+                    }
+                    try await authSession.createAddress(
+                        label: draft.label,
+                        street: draft.street,
+                        city: draft.city,
+                        postalCode: draft.postalCode,
+                        lat: lat,
+                        lng: lng
+                    )
+                    if let newAddress = authSession.userProfile?.addresses.last {
+                        viewModel.selectAddress(newAddress)
+                    }
+                    isShowingAddSheet = false
+                } catch {
+                    errorMessage = error.localizedDescription
+                }
+            }
+        }
+        .alert("Adres silinsin mi?", isPresented: Binding(
+            get: { addressPendingDelete != nil },
+            set: { if !$0 { addressPendingDelete = nil } }
+        )) {
+            Button("Vazgeç", role: .cancel) {
+                addressPendingDelete = nil
+            }
+            Button("Sil", role: .destructive) {
+                guard let address = addressPendingDelete else { return }
+                Task {
+                    do {
+                        try await authSession.deleteAddress(id: address.id)
+                        addressPendingDelete = nil
+                    } catch {
+                        errorMessage = error.localizedDescription
+                    }
+                }
+            }
+        } message: {
+            Text(addressPendingDelete?.title ?? "")
+        }
+        .alert("Adres Hatası", isPresented: Binding(
+            get: { errorMessage != nil },
+            set: { if !$0 { errorMessage = nil } }
+        )) {
+            Button("Tamam", role: .cancel) {
+                errorMessage = nil
+            }
+        } message: {
+            Text(errorMessage ?? "")
+        }
     }
 }
 
@@ -96,26 +241,33 @@ struct PaymentMethodsView: View {
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: 14) {
-                ForEach(viewModel.userProfile.paymentMethods) { method in
-                    HStack {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(method.title)
-                                .font(.system(size: 18, weight: .bold, design: .rounded))
-                                .foregroundStyle(AppTheme.ink)
-                            Text(method.detail)
-                                .font(.system(size: 14, weight: .medium, design: .rounded))
-                                .foregroundStyle(AppTheme.subtleText)
-                        }
-                        Spacer()
-                        if method.isDefault {
-                            TagPill(text: "Varsayılan", tint: AppTheme.orangeSoft)
-                        }
-                    }
-                    .padding(18)
-                    .background(
-                        RoundedRectangle(cornerRadius: 22, style: .continuous)
-                            .fill(Color.white)
+                if viewModel.userProfile.paymentMethods.isEmpty {
+                    EmptyStateCard(
+                        title: "Kayıtlı kart bulunamadı",
+                        message: "Payment methods endpoint'i henüz mobile uygulamaya bağlanmadı."
                     )
+                } else {
+                    ForEach(viewModel.userProfile.paymentMethods) { method in
+                        HStack {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(method.title)
+                                    .font(.system(size: 18, weight: .bold, design: .rounded))
+                                    .foregroundStyle(AppTheme.ink)
+                                Text(method.detail)
+                                    .font(.system(size: 14, weight: .medium, design: .rounded))
+                                    .foregroundStyle(AppTheme.subtleText)
+                            }
+                            Spacer()
+                            if method.isDefault {
+                                TagPill(text: "Varsayılan", tint: AppTheme.orangeSoft)
+                            }
+                        }
+                        .padding(18)
+                        .background(
+                            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                                .fill(Color.white)
+                        )
+                    }
                 }
             }
             .padding(16)

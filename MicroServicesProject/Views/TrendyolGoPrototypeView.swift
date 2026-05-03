@@ -3,9 +3,9 @@ import SwiftUI
 
 struct TrendyolGoPrototypeView: View {
     @EnvironmentObject private var viewModel: ContentViewModel
+    @EnvironmentObject private var authSession: AuthSessionViewModel
     @EnvironmentObject private var tabRouter: TabRouterViewModel
     @State private var isCartPresented = false
-    @State private var showLaunchFlow = true
     @State private var showsReferenceTabBar = true
 
     var body: some View {
@@ -28,8 +28,14 @@ struct TrendyolGoPrototypeView: View {
                 ReferenceTabBar()
             }
         }
-        .fullScreenCover(isPresented: $showLaunchFlow) {
-            LaunchFlowView(isPresented: $showLaunchFlow)
+        .fullScreenCover(
+            isPresented: Binding(
+                get: { !authSession.isAuthenticated },
+                set: { _ in }
+            )
+        ) {
+            LaunchFlowView()
+                .interactiveDismissDisabled()
         }
     }
 }

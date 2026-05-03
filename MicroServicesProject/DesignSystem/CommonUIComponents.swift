@@ -174,7 +174,7 @@ struct AccountMenuItem: Identifiable {
     let destination: AnyView
 
     static let items: [AccountMenuItem] = [
-        AccountMenuItem(title: "Kullanıcı Bilgilerim", systemImage: "person", badgeText: nil, destination: AnyView(SimpleAccountView(title: "Kullanıcı Bilgilerim", subtitle: "Profil düzenleme bu prototipte mock bırakıldı."))),
+        AccountMenuItem(title: "Kullanıcı Bilgilerim", systemImage: "person", badgeText: nil, destination: AnyView(UserInfoView())),
         AccountMenuItem(title: "Adreslerim", systemImage: "mappin.and.ellipse", badgeText: nil, destination: AnyView(AddressListView())),
         AccountMenuItem(title: "Kayıtlı Kartlarım", systemImage: "creditcard", badgeText: nil, destination: AnyView(PaymentMethodsView())),
         AccountMenuItem(title: "İndirim Kuponlarım", systemImage: "ticket", badgeText: nil, destination: AnyView(CampaignsView())),
@@ -182,8 +182,7 @@ struct AccountMenuItem: Identifiable {
         AccountMenuItem(title: "Duyuru Tercihlerim", systemImage: "bell", badgeText: nil, destination: AnyView(NotificationsView())),
         AccountMenuItem(title: "Trendyol Go Seni Dinliyor", systemImage: "list.clipboard", badgeText: "YENI", destination: AnyView(SupportView())),
         AccountMenuItem(title: "Güvenlik", systemImage: "shield", badgeText: nil, destination: AnyView(SimpleAccountView(title: "Güvenlik", subtitle: "Şifre ve oturum ayarları burada gösterilebilir."))),
-        AccountMenuItem(title: "Daha Fazla", systemImage: "ellipsis.circle", badgeText: nil, destination: AnyView(SimpleAccountView(title: "Daha Fazla", subtitle: "Ek ayarlar ve sık sorulanlar için alan."))),
-        AccountMenuItem(title: "Çıkış Yap", systemImage: "rectangle.portrait.and.arrow.right", badgeText: nil, destination: AnyView(SimpleAccountView(title: "Çıkış Yap", subtitle: "Bu demo sürümünde çıkış işlemi mock olarak bırakıldı.")))
+        AccountMenuItem(title: "Daha Fazla", systemImage: "ellipsis.circle", badgeText: nil, destination: AnyView(SimpleAccountView(title: "Daha Fazla", subtitle: "Ek ayarlar ve sık sorulanlar için alan.")))
     ]
 }
 
