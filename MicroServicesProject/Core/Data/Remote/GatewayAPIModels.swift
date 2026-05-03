@@ -7,6 +7,45 @@ struct FavoritesListResponse: Decodable {
     let data: [FavoriteVendorResponse]
 }
 
+struct SearchDiscoveryResponse: Decodable {
+    let suggestions: [String]?
+}
+
+struct CampaignsResponse: Decodable {
+    struct CampaignItem: Decodable {
+        let id: String?
+        let title: String?
+        let subtitle: String?
+        let badge: String?
+        let detail: String?
+    }
+
+    let data: [CampaignItem]?
+}
+
+struct NearbyVendorsResponse: Decodable {
+    struct VendorItem: Decodable {
+        let id: String
+        let name: String
+        let rating: Double?
+        let review_count: Int?
+        let eta: String?
+        let delivery_fee: Double?
+    }
+
+    let data: [VendorItem]?
+}
+
+struct GatewayHealthResponse: Decodable {
+    let status: String?
+}
+
+struct GatewayInfoResponse: Decodable {
+    let title: String?
+    let version: String?
+    let description: String?
+}
+
 struct FavoriteVendorResponse: Decodable {
     let vendor_id: String
     let name: String
@@ -56,6 +95,55 @@ struct OrdersListResponse: Decodable {
     let size: Int
     let total: Int
     let data: [OrderSummaryResponse]
+}
+
+struct CartStateResponse: Decodable {
+    struct ItemResponse: Decodable {
+        let product_id: String?
+        let productId: String?
+        let product_name: String?
+        let productName: String?
+        let quantity: Int?
+        let unit_price: Double?
+        let unitPrice: Double?
+        let total_price: Double?
+        let totalPrice: Double?
+        let vendor_name: String?
+    }
+
+    let items: [ItemResponse]?
+    let data: [ItemResponse]?
+    let total_amount: Double?
+    let totalAmount: Double?
+    let vendor_name: String?
+    let vendorName: String?
+}
+
+extension CartStateResponse {
+    var appCartItems: [CartItem] {
+        let sourceItems = (items ?? data ?? [])
+        return sourceItems.map { item in
+            let resolvedPrice = item.unit_price ?? item.unitPrice ?? item.total_price ?? item.totalPrice ?? 0
+            let product = Product(
+                backendID: item.product_id ?? item.productId,
+                name: item.product_name ?? item.productName ?? "Ürün",
+                description: "Canlı sepet ürünü",
+                price: resolvedPrice,
+                badge: nil,
+                systemImage: "fork.knife",
+                theme: .orange,
+                optionGroups: []
+            )
+            return CartItem(
+                product: product,
+                vendorID: UUID(),
+                vendorName: item.vendor_name ?? vendor_name ?? vendorName ?? "Sepet",
+                selectedOptions: [],
+                note: "",
+                quantity: max(1, item.quantity ?? 1)
+            )
+        }
+    }
 }
 
 struct OrderAddressSnapshotResponse: Decodable {
@@ -122,6 +210,33 @@ extension FavoriteVendorResponse {
             reviewCount: 0,
             deliveryFee: 0,
             promoText: "Favori restoran"
+        )
+    }
+}
+
+extension CampaignsResponse.CampaignItem {
+    var appCampaign: Campaign {
+        Campaign(
+            title: title ?? "Kampanya",
+            subtitle: subtitle ?? "Canlı kampanya",
+            badge: badge ?? "CANLI",
+            detail: detail ?? "Gateway kampanya detayı",
+            theme: .orange
+        )
+    }
+}
+
+extension NearbyVendorsResponse.VendorItem {
+    var appVendor: Vendor {
+        makeLightweightVendor(
+            backendID: id,
+            name: name,
+            summary: "Yakın restoran",
+            eta: eta ?? "20-30 dk",
+            rating: rating ?? 0,
+            reviewCount: review_count ?? 0,
+            deliveryFee: delivery_fee ?? 0,
+            promoText: "Nearby sonucu"
         )
     }
 }
@@ -213,6 +328,7 @@ extension HomeDiscoverResponse.ActiveOrderResponse {
             total: 0,
             dateLabel: "Aktif sipariş",
             statusLabel: status_label ?? status ?? "Sipariş hazırlanıyor",
+            statusCode: status,
             addressLine: "Teslimat adresi detay ekranında güncellenecek",
             etaRange: "Canlı takip",
             campaignNote: "Home discover aktif sipariş özeti",
@@ -236,6 +352,7 @@ extension OrderSummaryResponse {
             total: total_amount ?? total_price ?? 0,
             dateLabel: date_label ?? "Geçmiş sipariş",
             statusLabel: status_label ?? prettifiedStatus(status) ?? "Sipariş",
+            statusCode: status,
             addressLine: address_snapshot?.addressLine ?? "Adres bilgisi yok",
             etaRange: date_label ?? "Detay ekranda",
             campaignNote: "Geçmiş sipariş",
@@ -259,6 +376,7 @@ extension OrderDetailResponse {
             total: total_amount ?? total_price ?? baseOrder.total,
             dateLabel: baseOrder.dateLabel,
             statusLabel: status_label ?? prettifiedStatus(status) ?? baseOrder.statusLabel,
+            statusCode: status ?? baseOrder.statusCode,
             addressLine: address_snapshot?.addressLine ?? baseOrder.addressLine,
             etaRange: eta_range ?? baseOrder.etaRange,
             campaignNote: baseOrder.campaignNote,
@@ -363,9 +481,9 @@ private func makeLightweightVendor(
 }
 
 private func defaultSteps(for status: String?) -> [OrderStep] {
-    let normalized = (status ?? "").uppercased()
+    let normalized = normalizedOrderStatus(status)
 
-    if normalized == "DELIVERING" {
+    if ["DELIVERING", "ON_THE_WAY", "COURIER_ASSIGNED", "READY_FOR_DELIVERY"].contains(normalized) {
         return [
             OrderStep(title: "Sipariş alındı", detail: "Siparişin sisteme düştü", symbol: "checkmark.circle.fill"),
             OrderStep(title: "Hazırlanıyor", detail: "Restoran siparişi hazırlıyor", symbol: "bag.fill"),
@@ -392,31 +510,52 @@ private func defaultSteps(for status: String?) -> [OrderStep] {
 }
 
 private func defaultActiveStep(for status: String?) -> Int {
-    switch (status ?? "").uppercased() {
+    switch normalizedOrderStatus(status) {
     case "DELIVERED":
         return 3
-    case "DELIVERING":
+    case "DELIVERING", "ON_THE_WAY", "COURIER_ASSIGNED", "READY_FOR_DELIVERY":
         return 2
     case "PREPARING":
         return 1
+    case "CANCELLED", "REJECTED", "REFUNDED", "REFUND_COMPLETED":
+        return 0
     default:
         return 0
     }
 }
 
 private func prettifiedStatus(_ status: String?) -> String? {
-    switch (status ?? "").uppercased() {
+    switch normalizedOrderStatus(status) {
+    case "PENDING_PAYMENT":
+        return "Ödeme bekleniyor"
+    case "PENDING", "RECEIVED", "HOLD_PENDING", "HOLD_CONFIRMED":
+        return "Sipariş alındı"
+    case "CONFIRMED":
+        return "Sipariş onaylandı"
     case "DELIVERED":
         return "Teslim edildi"
-    case "DELIVERING":
+    case "DELIVERING", "ON_THE_WAY", "COURIER_ASSIGNED", "READY_FOR_DELIVERY":
         return "Kurye yolda"
     case "PREPARING":
         return "Hazırlanıyor"
-    case "PENDING":
-        return "Sipariş alındı"
+    case "CANCELLED":
+        return "İptal edildi"
+    case "REJECTED":
+        return "Reddedildi"
+    case "REFUND_REQUESTED":
+        return "İade talebi alındı"
+    case "REFUNDED", "REFUND_COMPLETED":
+        return "İade tamamlandı"
     default:
         return nil
     }
+}
+
+private func normalizedOrderStatus(_ status: String?) -> String {
+    (status ?? "")
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+        .replacingOccurrences(of: "-", with: "_")
+        .uppercased()
 }
 
 private func symbol(for title: String) -> String {

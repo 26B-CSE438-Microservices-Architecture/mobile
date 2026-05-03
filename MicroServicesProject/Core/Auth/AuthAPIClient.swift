@@ -70,6 +70,54 @@ struct AuthAPIClient {
         )
     }
 
+    func changePassword(accessToken: String, currentPassword: String, newPassword: String) async throws -> String {
+        let response: GenericMessageResponse = try await sendRequest(
+            path: "/api/v1/auth/change-password",
+            method: "POST",
+            body: ChangePasswordRequestBody(
+                current_password: currentPassword,
+                new_password: newPassword
+            ),
+            accessToken: accessToken
+        )
+        return response.message ?? "Şifre güncellendi."
+    }
+
+    func forgotPassword(email: String) async throws -> String {
+        let response: GenericMessageResponse = try await sendRequest(
+            path: "/api/v1/auth/forgot-password",
+            method: "POST",
+            body: ForgotPasswordRequestBody(email: email)
+        )
+        return response.message ?? "Şifre sıfırlama bağlantısı gönderildi."
+    }
+
+    func resetPassword(token: String, newPassword: String) async throws -> String {
+        let response: GenericMessageResponse = try await sendRequest(
+            path: "/api/v1/auth/reset-password",
+            method: "POST",
+            body: ResetPasswordRequestBody(token: token, new_password: newPassword)
+        )
+        return response.message ?? "Şifre sıfırlandı."
+    }
+
+    func verifyToken(token: String) async throws -> String {
+        let response: GenericMessageResponse = try await sendRequest(
+            path: "/api/v1/auth/verify-token",
+            method: "POST",
+            body: VerifyTokenRequestBody(token: token)
+        )
+        return response.message ?? "Token doğrulandı."
+    }
+
+    func confirmEmail(token: String) async throws -> String {
+        let response: GenericMessageResponse = try await sendRequest(
+            url: makeURL(path: "/api/v1/auth/confirm-email", queryItems: [URLQueryItem(name: "token", value: token)]),
+            method: "GET"
+        )
+        return response.message ?? "E-posta doğrulandı."
+    }
+
     func createAddress(
         accessToken: String,
         label: String,
@@ -153,6 +201,40 @@ struct AuthAPIClient {
         )
     }
 
+    func fetchNearbyVendors(lat: Double, lng: Double) async throws -> NearbyVendorsResponse {
+        try await sendRequest(
+            url: makeURL(
+                path: "/api/v1/vendors/nearby",
+                queryItems: [
+                    URLQueryItem(name: "lat", value: String(lat)),
+                    URLQueryItem(name: "lng", value: String(lng))
+                ]
+            ),
+            method: "GET"
+        )
+    }
+
+    func fetchCampaigns(page: Int = 1, limit: Int = 20) async throws -> CampaignsResponse {
+        try await sendRequest(
+            url: makeURL(
+                path: "/api/v1/campaigns",
+                queryItems: [
+                    URLQueryItem(name: "page", value: String(page)),
+                    URLQueryItem(name: "limit", value: String(limit))
+                ]
+            ),
+            method: "GET"
+        )
+    }
+
+    func fetchGatewayHealth() async throws -> GatewayHealthResponse {
+        try await sendRequest(path: "/health", method: "GET")
+    }
+
+    func fetchGatewayInfo() async throws -> GatewayInfoResponse {
+        try await sendRequest(path: "/info", method: "GET")
+    }
+
     func fetchOrders(accessToken: String, page: Int = 0, size: Int = 20) async throws -> OrdersListResponse {
         try await sendRequest(
             url: makeURL(
@@ -173,6 +255,84 @@ struct AuthAPIClient {
             method: "GET",
             accessToken: accessToken
         )
+    }
+
+    func cancelOrder(accessToken: String, id: String) async throws -> String {
+        let response: GenericMessageResponse = try await sendRequest(
+            path: "/api/v1/orders/\(id)/cancel",
+            method: "POST",
+            accessToken: accessToken
+        )
+        return response.message ?? "Sipariş iptal edildi."
+    }
+
+    func reorderOrder(accessToken: String, id: String) async throws -> String {
+        let response: GenericMessageResponse = try await sendRequest(
+            path: "/api/v1/orders/\(id)/reorder",
+            method: "POST",
+            accessToken: accessToken
+        )
+        return response.message ?? "Sipariş tekrarlandı."
+    }
+
+    func requestRefund(accessToken: String, id: String) async throws -> String {
+        let response: GenericMessageResponse = try await sendRequest(
+            path: "/api/v1/orders/\(id)/request-refund",
+            method: "POST",
+            accessToken: accessToken
+        )
+        return response.message ?? "İade talebi alındı."
+    }
+
+    func fetchCart(accessToken: String) async throws -> CartStateResponse {
+        try await sendRequest(
+            path: "/api/v1/cart",
+            method: "GET",
+            accessToken: accessToken
+        )
+    }
+
+    func addCartItem(accessToken: String, productID: String, quantity: Int) async throws {
+        let _: EmptyResponse = try await sendRequest(
+            path: "/api/v1/cart/items",
+            method: "POST",
+            body: AddCartItemRequestBody(productId: productID, quantity: quantity),
+            accessToken: accessToken
+        )
+    }
+
+    func updateCartItem(accessToken: String, productID: String, quantity: Int) async throws {
+        let _: EmptyResponse = try await sendRequest(
+            path: "/api/v1/cart/items/\(productID)",
+            method: "PUT",
+            body: UpdateCartItemRequestBody(quantity: quantity),
+            accessToken: accessToken
+        )
+    }
+
+    func deleteCartItem(accessToken: String, productID: String) async throws {
+        let _: EmptyResponse = try await sendRequest(
+            path: "/api/v1/cart/items/\(productID)",
+            method: "DELETE",
+            accessToken: accessToken
+        )
+    }
+
+    func clearCart(accessToken: String) async throws {
+        let _: EmptyResponse = try await sendRequest(
+            path: "/api/v1/cart",
+            method: "DELETE",
+            accessToken: accessToken
+        )
+    }
+
+    func checkoutCart(accessToken: String) async throws -> String {
+        let response: GenericMessageResponse = try await sendRequest(
+            path: "/api/v1/cart/checkout",
+            method: "POST",
+            accessToken: accessToken
+        )
+        return response.message ?? "Checkout başlatıldı."
     }
 
     private func sendRequest<Response: Decodable>(

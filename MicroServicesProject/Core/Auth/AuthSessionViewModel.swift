@@ -7,6 +7,7 @@ final class AuthSessionViewModel: ObservableObject {
     @Published private(set) var userProfile: UserProfile?
     @Published private(set) var isRestoringSession = true
     @Published private(set) var isSubmitting = false
+    @Published private(set) var isTokenVerified = false
 
     var isAuthenticated: Bool {
         snapshot != nil
@@ -40,6 +41,7 @@ final class AuthSessionViewModel: ObservableObject {
             ),
             userProfile: profileResponse.appUserProfile
         )
+        isTokenVerified = (try? await client.verifyToken(token: session.accessToken)) != nil
     }
 
     func register(
@@ -70,6 +72,7 @@ final class AuthSessionViewModel: ObservableObject {
             ),
             userProfile: profileResponse.appUserProfile
         )
+        isTokenVerified = (try? await client.verifyToken(token: session.accessToken)) != nil
     }
 
     func signOut() async -> String? {
@@ -148,6 +151,33 @@ final class AuthSessionViewModel: ObservableObject {
         try await refreshUserProfile(using: snapshot)
     }
 
+    func changePassword(currentPassword: String, newPassword: String) async throws -> String {
+        guard let snapshot else {
+            throw AppAuthError(message: "Oturum bulunamadı.")
+        }
+        return try await client.changePassword(
+            accessToken: snapshot.accessToken,
+            currentPassword: currentPassword,
+            newPassword: newPassword
+        )
+    }
+
+    func forgotPassword(email: String) async throws -> String {
+        try await client.forgotPassword(email: email)
+    }
+
+    func resetPassword(token: String, newPassword: String) async throws -> String {
+        try await client.resetPassword(token: token, newPassword: newPassword)
+    }
+
+    func verifyToken(_ token: String) async throws -> String {
+        try await client.verifyToken(token: token)
+    }
+
+    func confirmEmail(token: String) async throws -> String {
+        try await client.confirmEmail(token: token)
+    }
+
     private func restoreSession() async {
         defer { isRestoringSession = false }
 
@@ -165,6 +195,7 @@ final class AuthSessionViewModel: ObservableObject {
                     user: storedSession.user
                 )
             )
+            isTokenVerified = (try? await client.verifyToken(token: refreshResponse.access_token)) != nil
         } catch {
             clearSession()
         }
@@ -184,6 +215,7 @@ final class AuthSessionViewModel: ObservableObject {
         snapshot = nil
         currentUser = nil
         userProfile = nil
+        isTokenVerified = false
         UserDefaults.standard.removeObject(forKey: storageKey)
     }
 

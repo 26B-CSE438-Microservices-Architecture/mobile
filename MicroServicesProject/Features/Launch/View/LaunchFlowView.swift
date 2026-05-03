@@ -21,6 +21,13 @@ struct LaunchFlowView: View {
     @State private var email = ""
     @State private var password = ""
     @State private var confirmPassword = ""
+    @State private var currentPassword = ""
+    @State private var resetToken = ""
+    @State private var verifyTokenText = ""
+    @State private var confirmEmailToken = ""
+    @State private var showsAdvancedTools = false
+    @State private var isRunningToolAction = false
+    @State private var infoMessage: String?
     @State private var errorMessage: String?
 
     private let introSlides = [
@@ -125,6 +132,61 @@ struct LaunchFlowView: View {
 
                 if mode == .register {
                     secureField(title: "Şifre tekrar", text: $confirmPassword, textContentType: .newPassword)
+                }
+
+                DisclosureGroup(isExpanded: $showsAdvancedTools) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Button("Şifremi unuttum") {
+                            submitForgotPassword()
+                        }
+                        .buttonStyle(.bordered)
+
+                        if authSession.isAuthenticated {
+                            secureField(title: "Mevcut şifre", text: $currentPassword, textContentType: .password)
+                            Button("Şifre değiştir") {
+                                submitChangePassword()
+                            }
+                            .buttonStyle(.borderedProminent)
+                        }
+
+                        formField(title: "Reset Token", text: $resetToken, textInputAutocapitalization: .never)
+                        Button("Reset token ile şifre sıfırla") {
+                            submitResetPassword()
+                        }
+                        .buttonStyle(.bordered)
+
+                        formField(title: "Verify Token", text: $verifyTokenText, textInputAutocapitalization: .never)
+                        Button("Token doğrula") {
+                            submitVerifyToken()
+                        }
+                        .buttonStyle(.bordered)
+
+                        formField(title: "Confirm Email Token", text: $confirmEmailToken, textInputAutocapitalization: .never)
+                        Button("E-posta doğrula") {
+                            submitConfirmEmail()
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                } label: {
+                    Text("Gelişmiş hesap araçları")
+                        .font(.system(size: 14, weight: .bold, design: .rounded))
+                        .foregroundStyle(AppTheme.subtleText)
+                }
+
+                if isRunningToolAction {
+                    HStack(spacing: 8) {
+                        ProgressView()
+                            .tint(AppTheme.orange)
+                        Text("İstek gönderiliyor...")
+                            .font(.system(size: 13, weight: .semibold, design: .rounded))
+                            .foregroundStyle(AppTheme.subtleText)
+                    }
+                }
+
+                if let infoMessage {
+                    Text(infoMessage)
+                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                        .foregroundStyle(AppTheme.subtleText)
                 }
 
                 if authSession.isSubmitting {
@@ -254,6 +316,7 @@ struct LaunchFlowView: View {
 
     private func submit() {
         errorMessage = validateForm()
+        infoMessage = nil
         guard errorMessage == nil else { return }
 
         Task {
@@ -272,6 +335,107 @@ struct LaunchFlowView: View {
                         password: password
                     )
                 }
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    private func submitForgotPassword() {
+        let trimmedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedEmail.isEmpty else {
+            errorMessage = "Forgot password için e-posta gerekli."
+            return
+        }
+        errorMessage = nil
+        Task {
+            isRunningToolAction = true
+            defer { isRunningToolAction = false }
+            do {
+                infoMessage = try await authSession.forgotPassword(email: trimmedEmail)
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    private func submitResetPassword() {
+        let token = resetToken.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !token.isEmpty else {
+            errorMessage = "Reset token boş olamaz."
+            return
+        }
+        guard !password.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            errorMessage = "Yeni şifreyi doldur."
+            return
+        }
+        errorMessage = nil
+        Task {
+            isRunningToolAction = true
+            defer { isRunningToolAction = false }
+            do {
+                infoMessage = try await authSession.resetPassword(token: token, newPassword: password)
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    private func submitChangePassword() {
+        guard authSession.isAuthenticated else {
+            errorMessage = "Önce giriş yap."
+            return
+        }
+        guard !currentPassword.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            errorMessage = "Mevcut şifre gerekli."
+            return
+        }
+        guard !password.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            errorMessage = "Yeni şifre gerekli."
+            return
+        }
+        errorMessage = nil
+        Task {
+            isRunningToolAction = true
+            defer { isRunningToolAction = false }
+            do {
+                infoMessage = try await authSession.changePassword(currentPassword: currentPassword, newPassword: password)
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    private func submitVerifyToken() {
+        let token = verifyTokenText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !token.isEmpty else {
+            errorMessage = "Verify token boş olamaz."
+            return
+        }
+        errorMessage = nil
+        Task {
+            isRunningToolAction = true
+            defer { isRunningToolAction = false }
+            do {
+                infoMessage = try await authSession.verifyToken(token)
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    private func submitConfirmEmail() {
+        let token = confirmEmailToken.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !token.isEmpty else {
+            errorMessage = "Confirm email token boş olamaz."
+            return
+        }
+        errorMessage = nil
+        Task {
+            isRunningToolAction = true
+            defer { isRunningToolAction = false }
+            do {
+                infoMessage = try await authSession.confirmEmail(token: token)
             } catch {
                 errorMessage = error.localizedDescription
             }

@@ -8,7 +8,7 @@ final class SearchViewModel: ObservableObject {
     @Published private(set) var resultProducts: [SearchProductResponse] = []
     @Published private(set) var errorMessage: String?
 
-    let recentSearches = ["Burger", "Döner", "Market", "Protein bowl"]
+    @Published private(set) var discoverySuggestions: [String] = ["Burger", "Döner", "Market", "Protein bowl"]
     private let client = SearchAPIClient()
     private let fallbackLatitude = 36.8969
     private let fallbackLongitude = 30.7133
@@ -26,6 +26,22 @@ final class SearchViewModel: ObservableObject {
         resultVendors = []
         resultProducts = []
         errorMessage = nil
+    }
+
+    @MainActor
+    func loadDiscoverySuggestionsIfNeeded() async {
+        guard discoverySuggestions.count <= 4 else { return }
+        do {
+            let response = try await client.discovery()
+            let suggestions = (response.suggestions ?? [])
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+            if !suggestions.isEmpty {
+                discoverySuggestions = suggestions
+            }
+        } catch {
+            // Keep defaults if discovery endpoint fails.
+        }
     }
 
     @MainActor

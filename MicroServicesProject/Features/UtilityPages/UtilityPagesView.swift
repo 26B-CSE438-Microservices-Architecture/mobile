@@ -156,7 +156,7 @@ struct CampaignsView: View {
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: 16) {
-                ForEach(viewModel.campaigns) { campaign in
+                ForEach(viewModel.liveCampaigns.isEmpty ? viewModel.campaigns : viewModel.liveCampaigns) { campaign in
                     VStack(alignment: .leading, spacing: 12) {
                         HStack {
                             TagPill(text: campaign.badge, tint: campaign.theme.softTint)
@@ -197,6 +197,18 @@ struct CampaignsView: View {
         .background(AppTheme.canvas.ignoresSafeArea())
         .navigationTitle("Kampanyalar")
         .navigationBarTitleDisplayMode(.inline)
+        .safeAreaInset(edge: .bottom) {
+            if let status = viewModel.gatewayHealthStatus {
+                Text("Gateway: \(status)\(viewModel.gatewayInfoVersion.map { " • v\($0)" } ?? "")")
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .foregroundStyle(AppTheme.subtleText)
+                    .padding(.vertical, 8)
+            }
+        }
+        .task {
+            await viewModel.loadCampaigns()
+            await viewModel.loadGatewayMeta()
+        }
     }
 }
 

@@ -12,10 +12,15 @@ final class ContentViewModel: ObservableObject {
     @Published var homePrimaryServices: [HomePrimaryService]
     @Published var homeMiniServices: [HomeMiniService]
     @Published var homeHeroBanners: [HomeHeroBanner]
+    @Published private(set) var nearbyVendors: [Vendor] = []
+    @Published private(set) var liveCampaigns: [Campaign] = []
+    @Published private(set) var gatewayHealthStatus: String?
+    @Published private(set) var gatewayInfoVersion: String?
     @Published private(set) var isLoadingRemoteRestaurants = false
     @Published private(set) var homeErrorMessage: String?
     @Published private(set) var favoritesErrorMessage: String?
     @Published private(set) var ordersErrorMessage: String?
+    @Published private(set) var cartErrorMessage: String?
 
     let shortcuts: [CategoryShortcut]
     let campaigns: [Campaign]
@@ -35,6 +40,9 @@ final class ContentViewModel: ObservableObject {
     private var usesRemoteRestaurants = false
     private var usesRemoteHomeDiscover = false
     private var usesRemoteOrders = false
+    private var usesRemoteCart = false
+    private var remoteAccessToken: String?
+    private let strictProdMode = true
 
     @Published var isInFoodService: Bool = false {
         didSet {
@@ -191,6 +199,42 @@ final class ContentViewModel: ObservableObject {
         }
     }
 
+    func loadNearbyVendors() async {
+        do {
+            let lat = selectedAddress.latitude ?? 36.8969
+            let lng = selectedAddress.longitude ?? 30.7133
+            let response = try await authClient.fetchNearbyVendors(lat: lat, lng: lng)
+            nearbyVendors = (response.data ?? []).map(\.appVendor)
+        } catch {
+            nearbyVendors = []
+        }
+    }
+
+    func loadCampaigns() async {
+        do {
+            let response = try await authClient.fetchCampaigns(page: 1, limit: 20)
+            liveCampaigns = (response.data ?? []).map(\.appCampaign)
+        } catch {
+            liveCampaigns = []
+        }
+    }
+
+    func loadGatewayMeta() async {
+        do {
+            let health = try await authClient.fetchGatewayHealth()
+            gatewayHealthStatus = health.status ?? "unknown"
+        } catch {
+            gatewayHealthStatus = "unavailable"
+        }
+
+        do {
+            let info = try await authClient.fetchGatewayInfo()
+            gatewayInfoVersion = info.version
+        } catch {
+            gatewayInfoVersion = nil
+        }
+    }
+
     func loadFavorites(accessToken: String) async {
         favoritesErrorMessage = nil
 
@@ -205,6 +249,7 @@ final class ContentViewModel: ObservableObject {
     }
 
     func loadOrders(accessToken: String) async {
+        remoteAccessToken = accessToken
         ordersErrorMessage = nil
 
         do {
@@ -254,6 +299,20 @@ final class ContentViewModel: ObservableObject {
     }
 
     func addToCart(product: Product, from vendor: Vendor, selectedOptions: [String] = [], note: String = "", quantity: Int = 1) {
+        if strictProdMode, let token = remoteAccessToken, let backendID = product.backendID {
+            Task {
+                do {
+                    try await authClient.addCartItem(accessToken: token, productID: backendID, quantity: quantity)
+                    await loadCart(accessToken: token)
+                } catch {
+                    await MainActor.run {
+                        cartErrorMessage = error.localizedDescription
+                    }
+                }
+            }
+            return
+        }
+
         repository.addToCart(
             product: product,
             from: vendor,
@@ -262,16 +321,43 @@ final class ContentViewModel: ObservableObject {
             quantity: quantity
         )
         refreshState()
+
+        if let token = remoteAccessToken, let backendID = product.backendID {
+            Task {
+                do {
+                    try await authClient.addCartItem(accessToken: token, productID: backendID, quantity: quantity)
+                    await loadCart(accessToken: token)
+                } catch {
+                    await MainActor.run {
+                        cartErrorMessage = error.localizedDescription
+                    }
+                }
+            }
+        }
     }
 
     func incrementQuantity(for item: CartItem) {
+        if strictProdMode, remoteAccessToken != nil {
+            let currentQuantity = cartItems.first(where: { $0.id == item.id })?.quantity ?? item.quantity
+            let target = currentQuantity + 1
+            updateRemoteCartItem(item, quantity: target)
+            return
+        }
         repository.incrementQuantity(for: item)
         refreshState()
+        syncCartItemQuantityToRemote(item)
     }
 
     func decrementQuantity(for item: CartItem) {
+        if strictProdMode, remoteAccessToken != nil {
+            let currentQuantity = cartItems.first(where: { $0.id == item.id })?.quantity ?? item.quantity
+            let target = max(0, currentQuantity - 1)
+            updateRemoteCartItem(item, quantity: target)
+            return
+        }
         repository.decrementQuantity(for: item)
         refreshState()
+        syncCartItemQuantityToRemote(item)
     }
 
     func toggleFavorite(for vendor: Vendor, accessToken: String?) async {
@@ -299,6 +385,26 @@ final class ContentViewModel: ObservableObject {
     }
 
     func reorder(_ order: Order) {
+        if let token = remoteAccessToken, let backendID = order.backendID {
+            Task {
+                do {
+                    _ = try await authClient.reorderOrder(accessToken: token, id: backendID)
+                    await loadCart(accessToken: token)
+                    await MainActor.run { onTabChange?(.home) }
+                } catch {
+                    await MainActor.run {
+                        ordersErrorMessage = error.localizedDescription
+                        if !strictProdMode {
+                            repository.reorder(order)
+                            refreshState()
+                            onTabChange?(.home)
+                        }
+                    }
+                }
+            }
+            return
+        }
+
         repository.reorder(order)
         refreshState()
         onTabChange?(.home)
@@ -306,6 +412,23 @@ final class ContentViewModel: ObservableObject {
 
     func placeOrder() {
         guard !cartItems.isEmpty else { return }
+
+        if let token = remoteAccessToken {
+            Task {
+                do {
+                    _ = try await authClient.checkoutCart(accessToken: token)
+                    await loadCart(accessToken: token)
+                    await loadOrders(accessToken: token)
+                    await MainActor.run { onTabChange?(.orders) }
+                } catch {
+                    await MainActor.run {
+                        cartErrorMessage = error.localizedDescription
+                    }
+                }
+            }
+            return
+        }
+
         repository.placeOrder(
             total: cartTotal,
             campaignNote: cartDiscount > 0 ? "40 TL sepet indirimi uygulandı" : "Standart teslimat",
@@ -314,6 +437,50 @@ final class ContentViewModel: ObservableObject {
         )
         refreshState()
         onTabChange?(.orders)
+    }
+
+    func loadCart(accessToken: String) async {
+        remoteAccessToken = accessToken
+        cartErrorMessage = nil
+
+        do {
+            let response = try await authClient.fetchCart(accessToken: accessToken)
+            let remoteItems = response.appCartItems
+            usesRemoteCart = true
+            cartItems = remoteItems
+        } catch {
+            cartErrorMessage = error.localizedDescription
+        }
+    }
+
+    func cancelOrder(_ order: Order, accessToken: String) async {
+        guard canCancel(order: order) else {
+            ordersErrorMessage = "Bu sipariş mevcut durumunda iptal edilemez."
+            return
+        }
+        guard let backendID = order.backendID else { return }
+
+        do {
+            _ = try await authClient.cancelOrder(accessToken: accessToken, id: backendID)
+            await loadOrders(accessToken: accessToken)
+        } catch {
+            ordersErrorMessage = error.localizedDescription
+        }
+    }
+
+    func requestRefund(_ order: Order, accessToken: String) async {
+        guard canRequestRefund(order: order) else {
+            ordersErrorMessage = "Bu sipariş için iade talebi açılamaz."
+            return
+        }
+        guard let backendID = order.backendID else { return }
+
+        do {
+            _ = try await authClient.requestRefund(accessToken: accessToken, id: backendID)
+            await loadOrders(accessToken: accessToken)
+        } catch {
+            ordersErrorMessage = error.localizedDescription
+        }
     }
 
     private func refreshState() {
@@ -327,10 +494,99 @@ final class ContentViewModel: ObservableObject {
         if !usesRemoteOrders {
             pastOrders = repository.pastOrders
         }
-        cartItems = repository.cartItems
+        if !usesRemoteCart {
+            cartItems = repository.cartItems
+        }
         if !usesRemoteUserProfile {
             selectedAddress = repository.selectedAddress
             userProfile = repository.userProfile
+        }
+    }
+
+    private func syncCartItemQuantityToRemote(_ item: CartItem) {
+        guard let token = remoteAccessToken, let productID = item.product.backendID else {
+            return
+        }
+
+        let updatedQuantity = cartItems.first(where: { $0.id == item.id })?.quantity ?? 0
+        Task {
+            do {
+                if updatedQuantity <= 0 {
+                    try await authClient.deleteCartItem(accessToken: token, productID: productID)
+                } else {
+                    try await authClient.updateCartItem(accessToken: token, productID: productID, quantity: updatedQuantity)
+                }
+                await loadCart(accessToken: token)
+            } catch {
+                await MainActor.run {
+                    cartErrorMessage = error.localizedDescription
+                }
+            }
+        }
+    }
+
+    func canCancel(order: Order) -> Bool {
+        let code = normalizedStatus(order.statusCode)
+        if ["DELIVERED", "CANCELLED", "REJECTED", "REFUNDED", "REFUND_COMPLETED"].contains(code) {
+            return false
+        }
+        if ["PENDING", "RECEIVED", "PENDING_PAYMENT", "HOLD_PENDING", "HOLD_CONFIRMED", "CONFIRMED", "PREPARING"].contains(code) {
+            return true
+        }
+
+        let label = order.statusLabel.lowercased()
+        if label.contains("teslim") || label.contains("iptal") || label.contains("redd") || label.contains("iade") {
+            return false
+        }
+        if label.contains("alındı") || label.contains("hazırl") || label.contains("onay") {
+            return true
+        }
+        return false
+    }
+
+    func canRequestRefund(order: Order) -> Bool {
+        let code = normalizedStatus(order.statusCode)
+        if ["DELIVERED", "PAID", "COMPLETED"].contains(code) {
+            return true
+        }
+        if ["REFUNDED", "REFUND_COMPLETED", "CANCELLED", "REJECTED"].contains(code) {
+            return false
+        }
+
+        let label = order.statusLabel.lowercased()
+        if label.contains("teslim") {
+            return true
+        }
+        if label.contains("iptal") || label.contains("iade") || label.contains("redd") {
+            return false
+        }
+        return false
+    }
+
+    private func normalizedStatus(_ status: String?) -> String {
+        (status ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "-", with: "_")
+            .uppercased()
+    }
+
+    private func updateRemoteCartItem(_ item: CartItem, quantity: Int) {
+        guard let token = remoteAccessToken, let productID = item.product.backendID else {
+            return
+        }
+        Task {
+            do {
+                if quantity <= 0 {
+                    try await authClient.deleteCartItem(accessToken: token, productID: productID)
+                } else {
+                    try await authClient.updateCartItem(accessToken: token, productID: productID, quantity: quantity)
+                }
+                await loadCart(accessToken: token)
+            } catch {
+                await MainActor.run {
+                    cartErrorMessage = error.localizedDescription
+                }
+            }
         }
     }
 

@@ -114,6 +114,27 @@ struct HomeView: View {
                             }
                         }
 
+                        if !viewModel.nearbyVendors.isEmpty {
+                            HomeSectionBlock(
+                                title: "Yakındakiler",
+                                systemImage: "location.circle.fill",
+                                iconTint: AppTheme.orange,
+                                actionTitle: "\(viewModel.nearbyVendors.count) sonuç"
+                            ) {
+                                VStack(spacing: 14) {
+                                    ForEach(viewModel.nearbyVendors) { vendor in
+                                        NavigationLink {
+                                            RestaurantDetailView(vendor: vendor)
+                                        } label: {
+                                            VendorCard(vendor: vendor, compact: true)
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
+                                }
+                                .padding(.horizontal, 16)
+                            }
+                        }
+
                         HomeSectionBlock(title: "Sana Özel Marketler") {
                             ScrollView(.horizontal, showsIndicators: false) {
                                 HStack(spacing: 12) {
@@ -175,6 +196,11 @@ struct HomeView: View {
         }
         .onReceive(homeViewModel.searchSuggestionTimer) { _ in
             homeViewModel.advanceSuggestion(total: viewModel.homeSearchSuggestions.count)
+        }
+        .task {
+            await viewModel.loadNearbyVendors()
+            await viewModel.loadCampaigns()
+            await viewModel.loadGatewayMeta()
         }
     }
 }

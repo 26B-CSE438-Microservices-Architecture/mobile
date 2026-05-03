@@ -15,6 +15,7 @@ struct CartFlowView: View {
 
 struct CartView: View {
     @EnvironmentObject private var viewModel: ContentViewModel
+    @EnvironmentObject private var authSession: AuthSessionViewModel
     @Binding var isPresented: Bool
     @Binding var showsReferenceTabBar: Bool
     @StateObject private var cartViewModel = CartViewModel()
@@ -54,6 +55,13 @@ struct CartView: View {
                         total: cartViewModel.cartTotal
                     )
 
+                    if let errorMessage = viewModel.cartErrorMessage {
+                        Text(errorMessage)
+                            .font(.system(size: 13, weight: .semibold, design: .rounded))
+                            .foregroundStyle(.red)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+
                     NavigationLink(isActive: $isCheckoutActive) {
                         CheckoutView(isPresented: $isPresented, showsReferenceTabBar: $showsReferenceTabBar)
                     } label: {
@@ -86,6 +94,12 @@ struct CartView: View {
         }
         .onAppear {
             showsReferenceTabBar = true
+        }
+        .task {
+            if let accessToken = authSession.accessToken {
+                await viewModel.loadCart(accessToken: accessToken)
+                cartViewModel.sync(from: viewModel)
+            }
         }
     }
 }
@@ -390,6 +404,7 @@ struct OrderTrackingView: View {
     @EnvironmentObject private var viewModel: ContentViewModel
     @EnvironmentObject private var authSession: AuthSessionViewModel
     @StateObject private var orderTrackingViewModel: OrderTrackingViewModel
+    @State private var orderActionMessage: String?
 
     init(order: Order) {
         _orderTrackingViewModel = StateObject(wrappedValue: OrderTrackingViewModel(order: order))
@@ -530,6 +545,37 @@ struct OrderTrackingView: View {
                                 Text((item.product.price * Double(item.quantity)).formatted(.currency(code: "TRY")))
                                     .font(.system(size: 14, weight: .bold, design: .rounded))
                                     .foregroundStyle(AppTheme.ink)
+                            }
+                        }
+                    }
+                }
+
+                if let accessToken = authSession.accessToken, orderTrackingViewModel.order.backendID != nil {
+                    CheckoutSection(title: "Sipariş işlemleri") {
+                        VStack(spacing: 10) {
+                            Button("Siparişi İptal Et") {
+                                Task {
+                                    await viewModel.cancelOrder(orderTrackingViewModel.order, accessToken: accessToken)
+                                    orderActionMessage = "İptal isteği gönderildi."
+                                }
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(!viewModel.canCancel(order: orderTrackingViewModel.order))
+
+                            Button("İade Talep Et") {
+                                Task {
+                                    await viewModel.requestRefund(orderTrackingViewModel.order, accessToken: accessToken)
+                                    orderActionMessage = "İade talebi gönderildi."
+                                }
+                            }
+                            .buttonStyle(.bordered)
+                            .disabled(!viewModel.canRequestRefund(order: orderTrackingViewModel.order))
+
+                            if let orderActionMessage {
+                                Text(orderActionMessage)
+                                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                                    .foregroundStyle(AppTheme.subtleText)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
                             }
                         }
                     }

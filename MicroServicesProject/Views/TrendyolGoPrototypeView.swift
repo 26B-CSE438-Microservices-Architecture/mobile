@@ -62,12 +62,13 @@ struct TrendyolGoHomeHeader: View {
                         .padding(.leading, 1)
                         .padding(.bottom, 7)
                 }
+                .fixedSize(horizontal: true, vertical: false)
                 Text("by Uber Eats")
                     .font(.system(size: 14.5, weight: .black))
                     .foregroundStyle(.black)
                     .lineLimit(1)
             }
-            .frame(width: 104, alignment: .leading)
+            .frame(minWidth: 126, alignment: .leading)
             .layoutPriority(1)
 
             Button(action: onAddressTap) {
@@ -115,7 +116,7 @@ struct TrendyolGoHomeHeader: View {
                 .frame(width: 58)
             }
             .buttonStyle(.plain)
-            .frame(width: 54)
+            .frame(width: 50)
         }
     }
 }
@@ -204,10 +205,10 @@ struct HomePrimaryServiceCard: View {
                             .frame(height: 92)
                             .overlay(
                                 VStack(spacing: 5) {
-                                    Text(card.title)
+                                    Text(card.title.cleanedForDisplay)
                                         .font(.system(size: 18, weight: .bold))
                                         .foregroundStyle(titleColor)
-                                    Text(card.subtitle)
+                                    Text(card.subtitle.cleanedForDisplay)
                                         .font(.system(size: 10, weight: .bold))
                                         .foregroundStyle(subtitleColor)
                                         .multilineTextAlignment(.center)
@@ -222,7 +223,7 @@ struct HomePrimaryServiceCard: View {
                             .fill(Color(red: 0.22, green: 0.73, blue: 0.90))
                             .frame(height: 64)
                             .overlay(
-                                Text(card.title)
+                                Text(card.title.cleanedForDisplay)
                                     .font(.system(size: 18, weight: .bold))
                                     .foregroundStyle(.white)
                                     .multilineTextAlignment(.leading)
@@ -370,7 +371,7 @@ struct HomeMiniServiceCard: View {
                 .fill(Color.white)
 
             VStack(alignment: .leading, spacing: 6) {
-                Text(card.title)
+                Text(card.title.cleanedForDisplay)
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(AppTheme.referenceTitle)
                     .lineLimit(2)
@@ -396,6 +397,27 @@ struct HomeMiniServiceCard: View {
                 .offset(x: -2, y: -2)
         }
         .frame(width: 102, height: 88)
+    }
+}
+
+private extension String {
+    var cleanedForDisplay: String {
+        var value = self
+        let replacements: [(String, String)] = [
+            ("��ecek", "İçecek"),
+            ("�ecek", "İçecek"),
+            ("��", "ğ"),
+            ("�i�ek", "Çiçek"),
+            ("i�ek", "çiçek"),
+            ("�", "")
+        ]
+
+        for (wrong, right) in replacements {
+            value = value.replacingOccurrences(of: wrong, with: right)
+        }
+
+        return value
+            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
 

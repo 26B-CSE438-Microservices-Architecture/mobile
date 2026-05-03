@@ -59,6 +59,37 @@ struct LogoutRequestBody: Encodable {
     let refresh_token: String
 }
 
+struct ChangePasswordRequestBody: Encodable {
+    let current_password: String
+    let new_password: String
+}
+
+struct ForgotPasswordRequestBody: Encodable {
+    let email: String
+}
+
+struct ResetPasswordRequestBody: Encodable {
+    let token: String
+    let new_password: String
+}
+
+struct VerifyTokenRequestBody: Encodable {
+    let token: String
+}
+
+struct AddCartItemRequestBody: Encodable {
+    let productId: String
+    let quantity: Int
+}
+
+struct UpdateCartItemRequestBody: Encodable {
+    let quantity: Int
+}
+
+struct GenericMessageResponse: Decodable {
+    let message: String?
+}
+
 struct CreateAddressRequestBody: Encodable {
     let label: String
     let street: String

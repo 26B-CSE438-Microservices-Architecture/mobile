@@ -35,7 +35,7 @@ struct SearchView: View {
                             .font(.system(size: 18, weight: .bold, design: .rounded))
                             .foregroundStyle(AppTheme.ink)
 
-                        FlexibleChips(items: searchViewModel.recentSearches)
+                        FlexibleChips(items: searchViewModel.discoverySuggestions)
 
                         Text("Öne çıkan ürünler")
                             .font(.system(size: 18, weight: .bold, design: .rounded))
@@ -126,6 +126,9 @@ struct SearchView: View {
             .navigationBarTitleDisplayMode(.inline)
             .task(id: searchViewModel.normalizedQuery) {
                 await searchViewModel.search(selectedAddress: viewModel.selectedAddress)
+            }
+            .task {
+                await searchViewModel.loadDiscoverySuggestionsIfNeeded()
             }
         }
     }

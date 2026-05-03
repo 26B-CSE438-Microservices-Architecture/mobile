@@ -10,6 +10,11 @@ struct SearchAPIClient {
         return try await fetch(url: url)
     }
 
+    func discovery() async throws -> SearchDiscoveryResponse {
+        let url = baseURL.appendingPathComponent("api/v1/search/discovery")
+        return try await fetch(url: url)
+    }
+
     private func searchURL(query: String, latitude: Double, longitude: Double) -> URL {
         let url = baseURL.appendingPathComponent("api/v1/search")
         guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {

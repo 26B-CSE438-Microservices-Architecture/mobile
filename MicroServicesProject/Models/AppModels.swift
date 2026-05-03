@@ -194,6 +194,7 @@ struct Order: Identifiable, Hashable {
     let total: Double
     let dateLabel: String
     let statusLabel: String
+    let statusCode: String?
     let addressLine: String
     let etaRange: String
     let campaignNote: String
@@ -214,6 +215,7 @@ struct Order: Identifiable, Hashable {
         total: Double,
         dateLabel: String,
         statusLabel: String,
+        statusCode: String? = nil,
         addressLine: String,
         etaRange: String,
         campaignNote: String,
@@ -233,6 +235,7 @@ struct Order: Identifiable, Hashable {
         self.total = total
         self.dateLabel = dateLabel
         self.statusLabel = statusLabel
+        self.statusCode = statusCode
         self.addressLine = addressLine
         self.etaRange = etaRange
         self.campaignNote = campaignNote
