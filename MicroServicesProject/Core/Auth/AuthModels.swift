@@ -84,6 +84,7 @@ struct RegisterDeviceRequestBody: Encodable {
 
 struct AddCartItemRequestBody: Encodable {
     let productId: String
+    let restaurantId: String?
     let quantity: Int
 }
 

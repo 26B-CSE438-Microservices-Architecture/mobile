@@ -71,6 +71,13 @@ final class CheckoutViewModel: ObservableObject {
         let checkoutForm: CheckoutForm?
     }
 
+    private struct GatewayErrorResponse: Decodable {
+        struct ErrorDetail: Decodable {
+            let message: String
+        }
+        let error: ErrorDetail
+    }
+
     private struct PaymentResponse: Decodable {
         struct Payment: Decodable {
             let id: String
@@ -86,7 +93,7 @@ final class CheckoutViewModel: ObservableObject {
     @Published private(set) var isCompletingCheckout = false
     @Published private(set) var banner: PaymentBanner?
 
-    private let baseURL = URL(string: "http://127.0.0.1:3000")!
+    private let baseURL = URL(string: "https://gw.cse.akdeniz.edu.tr/cse-438/api/v1")!
     private let demoUserID = "ios_demo_user"
 
     func startHostedCheckout(using source: ContentViewModel) async {
@@ -106,18 +113,39 @@ final class CheckoutViewModel: ObservableObject {
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             request.setValue("idem-\(UUID().uuidString.lowercased())", forHTTPHeaderField: "Idempotency-Key")
             request.setValue(demoUserID, forHTTPHeaderField: "X-User-Id")
+            if let token = source.remoteAccessToken {
+                request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            }
             request.httpBody = try JSONEncoder().encode(requestBody)
+
+            print("[CheckoutViewModel] HTTP \(request.httpMethod ?? "") \(request.url?.absoluteString ?? "")")
+            print("[CheckoutViewModel] Headers: \(request.allHTTPHeaderFields ?? [:])")
+            if let bodyString = String(data: request.httpBody ?? Data(), encoding: .utf8) {
+                print("[CheckoutViewModel] Request body: \(bodyString)")
+            }
 
             let (data, response) = try await URLSession.shared.data(for: request)
             guard let httpResponse = response as? HTTPURLResponse else {
+                print("[CheckoutViewModel] Invalid response")
                 throw CheckoutError.invalidResponse
+            }
+            
+            print("[CheckoutViewModel] Response status: \(httpResponse.statusCode)")
+            if let rawString = String(data: data, encoding: .utf8) {
+                print("[CheckoutViewModel] Response body: \(rawString)")
+            }
+
+            guard (200...299).contains(httpResponse.statusCode) else {
+                if let gatewayError = try? JSONDecoder().decode(GatewayErrorResponse.self, from: data) {
+                    throw CheckoutError.backend(gatewayError.error.message)
+                }
+                if let rawString = String(data: data, encoding: .utf8), !rawString.isEmpty {
+                    throw CheckoutError.backend("HTTP \(httpResponse.statusCode): \(rawString)")
+                }
+                throw CheckoutError.backend("HTTP Error \(httpResponse.statusCode)")
             }
 
             let payload = try JSONDecoder().decode(CreatePaymentResponse.self, from: data)
-
-            guard (200...299).contains(httpResponse.statusCode) else {
-                throw CheckoutError.backend(payload.payment.failureReason ?? "Payment service isteği başarısız oldu.")
-            }
 
             guard payload.payment.status == "AWAITING_FORM", let checkoutForm = payload.checkoutForm else {
                 throw CheckoutError.backend(payload.payment.failureReason ?? "Checkout form alınamadı.")
@@ -163,10 +191,29 @@ final class CheckoutViewModel: ObservableObject {
                 .appendingPathComponent("callback"))
             request.httpMethod = "POST"
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            if let token = source.remoteAccessToken {
+                request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            }
             request.httpBody = try JSONSerialization.data(withJSONObject: ["token": session.callbackToken])
 
+            print("[CheckoutViewModel] HTTP \(request.httpMethod ?? "") \(request.url?.absoluteString ?? "")")
+            print("[CheckoutViewModel] Headers: \(request.allHTTPHeaderFields ?? [:])")
+            if let bodyString = String(data: request.httpBody ?? Data(), encoding: .utf8) {
+                print("[CheckoutViewModel] Request body: \(bodyString)")
+            }
+
             let (data, response) = try await URLSession.shared.data(for: request)
-            guard let httpResponse = response as? HTTPURLResponse, (200...299).contains(httpResponse.statusCode) else {
+            guard let httpResponse = response as? HTTPURLResponse else {
+                print("[CheckoutViewModel] Invalid callback response")
+                throw CheckoutError.invalidResponse
+            }
+            
+            print("[CheckoutViewModel] Callback Response status: \(httpResponse.statusCode)")
+            if let rawString = String(data: data, encoding: .utf8) {
+                print("[CheckoutViewModel] Callback Response body: \(rawString)")
+            }
+
+            guard (200...299).contains(httpResponse.statusCode) else {
                 throw CheckoutError.invalidResponse
             }
 
@@ -206,7 +253,7 @@ final class CheckoutViewModel: ObservableObject {
 
         let items = source.cartItems.map { item in
             CreatePaymentRequest.Item(
-                id: item.product.id.uuidString.lowercased(),
+                id: item.product.backendID ?? item.product.id.uuidString.lowercased(),
                 name: item.product.name,
                 category1: source.cartVendor?.kind == .market ? "Market" : "Food",
                 itemType: "PHYSICAL",

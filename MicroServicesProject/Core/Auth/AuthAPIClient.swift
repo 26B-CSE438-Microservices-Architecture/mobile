@@ -4,6 +4,7 @@ struct AuthAPIClient {
     private let baseURL = URL(string: "https://gw.cse.akdeniz.edu.tr/cse-438")!
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
+    private let debugLoggingEnabled = true
 
     // MARK: - Auth
 
@@ -304,23 +305,27 @@ struct AuthAPIClient {
     // MARK: - Cart
 
     func fetchCart(accessToken: String) async throws -> CartStateResponse {
-        try await sendRequest(
+        debugLog("GET /api/v1/cart")
+        let response: CartStateResponse = try await sendRequest(
             path: "/api/v1/cart",
             method: "GET",
             accessToken: accessToken
         )
+        return response
     }
 
-    func addCartItem(accessToken: String, productID: String, quantity: Int) async throws {
+    func addCartItem(accessToken: String, productID: String, restaurantID: String?, quantity: Int) async throws {
+        debugLog("POST /api/v1/cart/items productId=\(productID) quantity=\(quantity)")
         let _: EmptyResponse = try await sendRequest(
             path: "/api/v1/cart/items",
             method: "POST",
-            body: AddCartItemRequestBody(productId: productID, quantity: quantity),
+            body: AddCartItemRequestBody(productId: productID, restaurantId: restaurantID, quantity: quantity),
             accessToken: accessToken
         )
     }
 
     func updateCartItem(accessToken: String, productID: String, quantity: Int) async throws {
+        debugLog("PUT /api/v1/cart/items/\(productID) quantity=\(quantity)")
         let _: EmptyResponse = try await sendRequest(
             path: "/api/v1/cart/items/\(productID)",
             method: "PUT",
@@ -330,6 +335,7 @@ struct AuthAPIClient {
     }
 
     func deleteCartItem(accessToken: String, productID: String) async throws {
+        debugLog("DELETE /api/v1/cart/items/\(productID)")
         let _: EmptyResponse = try await sendRequest(
             path: "/api/v1/cart/items/\(productID)",
             method: "DELETE",
@@ -339,6 +345,7 @@ struct AuthAPIClient {
 
     // NOTE: Currently not used by mobile flow; kept for API parity.
     func clearCart(accessToken: String) async throws {
+        debugLog("DELETE /api/v1/cart")
         let _: EmptyResponse = try await sendRequest(
             path: "/api/v1/cart",
             method: "DELETE",
@@ -347,6 +354,7 @@ struct AuthAPIClient {
     }
 
     func checkoutCart(accessToken: String) async throws -> String {
+        debugLog("POST /api/v1/cart/checkout")
         let response: GenericMessageResponse = try await sendRequest(
             path: "/api/v1/cart/checkout",
             method: "POST",
@@ -400,6 +408,7 @@ struct AuthAPIClient {
         body: Body? = nil,
         accessToken: String? = nil
     ) async throws -> Response {
+        debugLog("HTTP \(method) \(url.absoluteString)")
         var request = URLRequest(url: url)
         request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Accept")
@@ -411,6 +420,9 @@ struct AuthAPIClient {
         if let body {
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             request.httpBody = try encoder.encode(body)
+            if let bodyString = String(data: request.httpBody ?? Data(), encoding: .utf8) {
+                debugLog("Request body: \(bodyString)")
+            }
         }
 
         let (data, response) = try await URLSession.shared.data(for: request)
@@ -418,17 +430,29 @@ struct AuthAPIClient {
             throw AppAuthError(message: "Servisten geçerli bir cevap alınamadı.")
         }
 
+        debugLog("Response status: \(httpResponse.statusCode)")
+
         guard (200 ... 299).contains(httpResponse.statusCode) else {
+            if let raw = String(data: data, encoding: .utf8), !raw.isEmpty {
+                debugLog("Response error body: \(raw)")
+            }
             throw AppAuthError(message: decodeErrorMessage(from: data, statusCode: httpResponse.statusCode))
         }
 
         if Response.self == EmptyResponse.self {
+            debugLog("Response body: <empty>")
             return EmptyResponse() as! Response
         }
 
         do {
+            if let raw = String(data: data, encoding: .utf8), !raw.isEmpty {
+                debugLog("Response body: \(raw)")
+            }
             return try decoder.decode(Response.self, from: data)
         } catch {
+            if let raw = String(data: data, encoding: .utf8), !raw.isEmpty {
+                debugLog("Decode failed for body: \(raw)")
+            }
             throw AppAuthError(message: "Beklenmeyen response formatı alındı.")
         }
     }
@@ -465,6 +489,11 @@ struct AuthAPIClient {
         }
         components.queryItems = queryItems
         return components.url ?? base
+    }
+
+    private func debugLog(_ message: String) {
+        guard debugLoggingEnabled else { return }
+        print("[AuthAPIClient] \(message)")
     }
 }
 

@@ -41,7 +41,7 @@ final class ContentViewModel: ObservableObject {
     private var usesRemoteHomeDiscover = false
     private var usesRemoteOrders = false
     private var usesRemoteCart = false
-    private var remoteAccessToken: String?
+    private(set) var remoteAccessToken: String?
     private let strictProdMode = true
 
     @Published var isInFoodService: Bool = false {
@@ -300,12 +300,14 @@ final class ContentViewModel: ObservableObject {
 
     func addToCart(product: Product, from vendor: Vendor, selectedOptions: [String] = [], note: String = "", quantity: Int = 1) {
         if strictProdMode, let token = remoteAccessToken, let backendID = product.backendID {
+            print("[CartFlow] addToCart remote mode vendor=\(vendor.name) product=\(product.name) backendID=\(backendID) quantity=\(quantity)")
             Task {
                 do {
-                    try await authClient.addCartItem(accessToken: token, productID: backendID, quantity: quantity)
+                    try await authClient.addCartItem(accessToken: token, productID: backendID, restaurantID: vendor.backendID, quantity: quantity)
                     await loadCart(accessToken: token)
                 } catch {
                     await MainActor.run {
+                        print("[CartFlow] addToCart failed: \(error.localizedDescription)")
                         cartErrorMessage = error.localizedDescription
                     }
                 }
@@ -325,7 +327,7 @@ final class ContentViewModel: ObservableObject {
         if let token = remoteAccessToken, let backendID = product.backendID {
             Task {
                 do {
-                    try await authClient.addCartItem(accessToken: token, productID: backendID, quantity: quantity)
+                    try await authClient.addCartItem(accessToken: token, productID: backendID, restaurantID: vendor.backendID, quantity: quantity)
                     await loadCart(accessToken: token)
                 } catch {
                     await MainActor.run {
@@ -443,14 +445,52 @@ final class ContentViewModel: ObservableObject {
     func loadCart(accessToken: String) async {
         remoteAccessToken = accessToken
         cartErrorMessage = nil
+        print("[CartFlow] loadCart started")
 
         do {
             let response = try await authClient.fetchCart(accessToken: accessToken)
-            let remoteItems = response.appCartItems
             usesRemoteCart = true
-            cartItems = remoteItems
+            
+            let enrichedItems = response.appCartItems.map { remoteItem -> CartItem in
+                guard let productID = remoteItem.product.backendID else { return remoteItem }
+                
+                // 1. First try to find it in our current local cart (which was loaded from UserDefaults)
+                if let existingItem = self.cartItems.first(where: { $0.product.backendID == productID }) {
+                    return CartItem(
+                        product: existingItem.product,
+                        vendorID: existingItem.vendorID,
+                        vendorName: existingItem.vendorName,
+                        selectedOptions: remoteItem.selectedOptions,
+                        note: remoteItem.note,
+                        quantity: remoteItem.quantity
+                    )
+                }
+                
+                // 2. Then try to find it in the loaded menu catalog
+                for vendor in allVendors {
+                    for section in vendor.menuSections {
+                        if let matchedProduct = section.products.first(where: { $0.backendID == productID }) {
+                            return CartItem(
+                                product: matchedProduct,
+                                vendorID: vendor.id,
+                                vendorName: vendor.name,
+                                selectedOptions: remoteItem.selectedOptions,
+                                note: remoteItem.note,
+                                quantity: remoteItem.quantity
+                            )
+                        }
+                    }
+                }
+                return remoteItem
+            }
+            
+            cartItems = enrichedItems
+            print("[CartFlow] loadCart success itemCount=\(enrichedItems.count)")
         } catch {
+            usesRemoteCart = true
+            cartItems = []
             cartErrorMessage = error.localizedDescription
+            print("[CartFlow] loadCart failed: \(error.localizedDescription)")
         }
     }
 
@@ -510,6 +550,7 @@ final class ContentViewModel: ObservableObject {
         }
 
         let updatedQuantity = cartItems.first(where: { $0.id == item.id })?.quantity ?? 0
+        print("[CartFlow] syncCartItemQuantityToRemote productID=\(productID) quantity=\(updatedQuantity)")
         Task {
             do {
                 if updatedQuantity <= 0 {
@@ -520,6 +561,7 @@ final class ContentViewModel: ObservableObject {
                 await loadCart(accessToken: token)
             } catch {
                 await MainActor.run {
+                    print("[CartFlow] syncCartItemQuantityToRemote failed: \(error.localizedDescription)")
                     cartErrorMessage = error.localizedDescription
                 }
             }

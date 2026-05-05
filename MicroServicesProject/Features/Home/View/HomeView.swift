@@ -62,15 +62,7 @@ struct HomeView: View {
 
                         HomeMiniServiceRow(cards: viewModel.homeMiniServices)
 
-                        HomeSectionBlock(
-                            title: "Mutfaklar",
-                            actionTitle: "Tümünü Gör"
-                        ) {
-                            HomeCuisineRow(cuisines: viewModel.homeCuisines)
-                        }
-
                         HomeBannerCarousel(banners: viewModel.homeHeroBanners)
-                        HomeRewardsCard(rewards: viewModel.homeRewardsOverview)
 
                         if !liveRestaurants.isEmpty {
                             HomeSectionBlock(
@@ -129,28 +121,6 @@ struct HomeView: View {
                                             VendorCard(vendor: vendor, compact: true)
                                         }
                                         .buttonStyle(.plain)
-                                    }
-                                }
-                                .padding(.horizontal, 16)
-                            }
-                        }
-
-                        HomeSectionBlock(title: "Sana Özel Marketler") {
-                            ScrollView(.horizontal, showsIndicators: false) {
-                                HStack(spacing: 12) {
-                                    ForEach(viewModel.homeMarkets) { market in
-                                        HomeMarketSpotlightCard(card: market)
-                                    }
-                                }
-                                .padding(.horizontal, 16)
-                            }
-                        }
-
-                        HomeSectionBlock(title: "Öne Çıkan Fırsatlar") {
-                            ScrollView(.horizontal, showsIndicators: false) {
-                                HStack(spacing: 12) {
-                                    ForEach(viewModel.homeOpportunities) { deal in
-                                        HomeOpportunitySpotlightCard(card: deal)
                                     }
                                 }
                                 .padding(.horizontal, 16)
