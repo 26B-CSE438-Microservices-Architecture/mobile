@@ -151,7 +151,7 @@ struct Vendor: Identifiable, Hashable {
 }
 
 struct CartItem: Identifiable, Hashable {
-    let id = UUID()
+    var id = UUID()
     let product: Product
     let vendorID: UUID
     let vendorName: String

@@ -18,12 +18,11 @@ struct CartView: View {
     @EnvironmentObject private var authSession: AuthSessionViewModel
     @Binding var isPresented: Bool
     @Binding var showsReferenceTabBar: Bool
-    @StateObject private var cartViewModel = CartViewModel()
     @State private var isCheckoutActive = false
 
     var body: some View {
         ScrollView(showsIndicators: false) {
-            if cartViewModel.cartItems.isEmpty {
+            if viewModel.cartItems.isEmpty {
                 EmptyStateView(
                     title: "Sepetin boş",
                     subtitle: "Ana sayfadan ürün eklediğinde burada görünecek.",
@@ -33,26 +32,26 @@ struct CartView: View {
             } else {
                 VStack(alignment: .leading, spacing: 18) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(cartViewModel.cartVendorName ?? "Sepet")
+                        Text(viewModel.cartVendorName ?? "Sepet")
                             .font(.system(size: 24, weight: .bold, design: .rounded))
                             .foregroundStyle(AppTheme.ink)
-                        Text("Teslimat adresi: \(cartViewModel.selectedAddressTitle)")
+                        Text("Teslimat adresi: \(viewModel.selectedAddress.title)")
                             .font(.system(size: 14, weight: .medium, design: .rounded))
                             .foregroundStyle(AppTheme.subtleText)
                     }
 
                     VStack(spacing: 12) {
-                        ForEach(cartViewModel.cartItems) { item in
+                        ForEach(viewModel.cartItems) { item in
                             CartItemRow(item: item)
                         }
                     }
 
                     PriceSummaryCard(
-                        subtotal: cartViewModel.cartSubtotal,
-                        delivery: cartViewModel.cartDeliveryFee,
-                        service: cartViewModel.cartServiceFee,
-                        discount: cartViewModel.cartDiscount,
-                        total: cartViewModel.cartTotal
+                        subtotal: viewModel.cartSubtotal,
+                        delivery: viewModel.cartDeliveryFee,
+                        service: viewModel.cartServiceFee,
+                        discount: viewModel.cartDiscount,
+                        total: viewModel.cartTotal
                     )
 
                     if let errorMessage = viewModel.cartErrorMessage {
@@ -69,7 +68,7 @@ struct CartView: View {
                             Text("Ödemeye geç")
                                 .font(.system(size: 16, weight: .bold, design: .rounded))
                             Spacer()
-                            Text(cartViewModel.cartTotal.formatted(.currency(code: "TRY")))
+                            Text(viewModel.cartTotal.formatted(.currency(code: "TRY")))
                                 .font(.system(size: 15, weight: .black, design: .rounded))
                         }
                         .foregroundStyle(.white)
@@ -87,18 +86,11 @@ struct CartView: View {
         .navigationTitle("Sepetim")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
-            cartViewModel.sync(from: viewModel)
-        }
-        .onReceive(viewModel.objectWillChange) { _ in
-            cartViewModel.sync(from: viewModel)
-        }
-        .onAppear {
             showsReferenceTabBar = true
         }
         .task {
             if let accessToken = authSession.accessToken {
                 await viewModel.loadCart(accessToken: accessToken)
-                cartViewModel.sync(from: viewModel)
             }
         }
     }

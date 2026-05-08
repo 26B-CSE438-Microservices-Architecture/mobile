@@ -94,7 +94,7 @@ struct OrdersListResponse: Decodable {
     let page: Int
     let size: Int
     let total: Int
-    let data: [OrderSummaryResponse]
+    let data: [OrderSummaryResponse]?
 }
 
 struct CartStateResponse: Decodable {
@@ -106,8 +106,10 @@ struct CartStateResponse: Decodable {
         let quantity: Int?
         let unit_price: Double?
         let unitPrice: Double?
+        let price: Double?
         let total_price: Double?
         let totalPrice: Double?
+        let subtotal: Double?
         let vendor_name: String?
     }
 
@@ -123,7 +125,9 @@ extension CartStateResponse {
     var appCartItems: [CartItem] {
         let sourceItems = (items ?? data ?? [])
         return sourceItems.map { item in
-            let resolvedPrice = item.unit_price ?? item.unitPrice ?? item.total_price ?? item.totalPrice ?? 0
+            let basePrice = item.price ?? item.unit_price ?? item.unitPrice
+            let alternativePrice = item.subtotal ?? item.total_price ?? item.totalPrice
+            let resolvedPrice = basePrice ?? alternativePrice ?? 0
             let product = Product(
                 backendID: item.product_id ?? item.productId,
                 name: item.product_name ?? item.productName ?? "Ürün",
@@ -158,18 +162,55 @@ struct OrderAddressSnapshotResponse: Decodable {
     let address_description: String?
 }
 
+struct OrderDeliveryAddressResponse: Decodable {
+    let street: String?
+    let district: String?
+    let city: String?
+    let postalCode: String?
+    let lat: Double?
+    let lng: Double?
+
+    var addressLine: String {
+        let rawParts: [String?] = [street, district, city]
+        let parts = rawParts.compactMap { value -> String? in
+                guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else {
+                    return nil
+                }
+                return trimmed
+            }
+
+        return parts.isEmpty ? "Adres bilgisi yok" : parts.joined(separator: ", ")
+    }
+}
+
 struct OrderSummaryResponse: Decodable {
-    let id: String
+    struct ItemResponse: Decodable {
+        let id: String?
+        let name: String?
+        let quantity: Int?
+        let price: Double?
+    }
+
+    let id: String?
+    let orderId: String?
     let vendor_name: String?
     let vendorName: String?
     let status: String?
     let status_label: String?
     let total_amount: Double?
     let total_price: Double?
+    let totalAmount: Double?
     let date_label: String?
     let address_snapshot: OrderAddressSnapshotResponse?
+    let deliveryAddress: OrderDeliveryAddressResponse?
     let item_summary: String?
     let delivered_item_count: Int?
+    let items: [ItemResponse]?
+    let createdAt: String?
+
+    var resolvedID: String? {
+        id ?? orderId
+    }
 }
 
 struct OrderDetailResponse: Decodable {
@@ -345,23 +386,27 @@ extension HomeDiscoverResponse.ActiveOrderResponse {
 
 extension OrderSummaryResponse {
     var appOrder: Order {
-        Order(
-            backendID: id,
-            vendorName: vendor_name ?? vendorName ?? "Sipariş",
+        let itemNames = (items ?? []).compactMap(\.name).filter { !$0.isEmpty }
+        let fallbackVendorName = itemNames.first ?? "Sipariş"
+        let fallbackSummary = itemNames.isEmpty ? nil : itemNames.joined(separator: ", ")
+
+        return Order(
+            backendID: resolvedID,
+            vendorName: vendor_name ?? vendorName ?? fallbackVendorName,
             items: [],
-            total: total_amount ?? total_price ?? 0,
-            dateLabel: date_label ?? "Geçmiş sipariş",
+            total: total_amount ?? total_price ?? totalAmount ?? 0,
+            dateLabel: date_label ?? createdAt ?? "Geçmiş sipariş",
             statusLabel: status_label ?? prettifiedStatus(status) ?? "Sipariş",
             statusCode: status,
-            addressLine: address_snapshot?.addressLine ?? "Adres bilgisi yok",
-            etaRange: date_label ?? "Detay ekranda",
+            addressLine: address_snapshot?.addressLine ?? deliveryAddress?.addressLine ?? "Adres bilgisi yok",
+            etaRange: date_label ?? createdAt ?? "Detay ekranda",
             campaignNote: "Geçmiş sipariş",
             courier: nil,
             steps: defaultSteps(for: status),
             activeStep: defaultActiveStep(for: status),
             isActive: (status ?? "").uppercased() != "DELIVERED",
-            itemSummary: item_summary,
-            deliveredItemCount: delivered_item_count ?? 0,
+            itemSummary: item_summary ?? fallbackSummary,
+            deliveredItemCount: delivered_item_count ?? (items ?? []).reduce(0) { $0 + ($1.quantity ?? 0) },
             showsRatingAction: (status ?? "").uppercased() == "DELIVERED"
         )
     }

@@ -84,12 +84,38 @@ struct RegisterDeviceRequestBody: Encodable {
 
 struct AddCartItemRequestBody: Encodable {
     let productId: String
-    let restaurantId: String?
+    let restaurantId: String
     let quantity: Int
 }
 
 struct UpdateCartItemRequestBody: Encodable {
     let quantity: Int
+}
+
+struct CheckoutAddressBody: Encodable {
+    let street: String
+    let district: String
+    let city: String
+    let postalCode: String
+    let lat: Double
+    let lng: Double
+}
+
+struct CheckoutRequestBody: Encodable {
+    let deliveryAddress: CheckoutAddressBody
+    let paymentMethod: String
+    let orderType: String
+    let notes: String
+}
+
+struct CheckoutOrderResponse: Decodable {
+    let orderId: String?
+    let order_id: String?
+    let message: String?
+
+    var resolvedOrderID: String? {
+        orderId ?? order_id
+    }
 }
 
 struct GenericMessageResponse: Decodable {

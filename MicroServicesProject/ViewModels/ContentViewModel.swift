@@ -53,7 +53,7 @@ final class ContentViewModel: ObservableObject {
     }
 
     var allVendors: [Vendor] {
-        restaurants + markets
+        restaurants + markets + nearbyVendors
     }
 
     @Published var selectedAddress: Address
@@ -255,7 +255,7 @@ final class ContentViewModel: ObservableObject {
         do {
             let response = try await authClient.fetchOrders(accessToken: accessToken)
             usesRemoteOrders = true
-            let mappedOrders = response.data.map(\.appOrder)
+            let mappedOrders = (response.data ?? []).map(\.appOrder)
             activeOrder = mappedOrders.first(where: \.isActive)
             pastOrders = mappedOrders.filter { !$0.isActive }
         } catch {
@@ -269,8 +269,11 @@ final class ContentViewModel: ObservableObject {
         }
 
         do {
-            let detailedVendor = try await vendorsClient.fetchVendorDetail(vendorID: backendID)
-            if let index = restaurants.firstIndex(where: { $0.id == vendor.id }) {
+            var detailedVendor = try await vendorsClient.fetchVendorDetail(vendorID: backendID)
+            // Preserve the user-specific favorite state which is not part of the global catalog detail
+            detailedVendor.isFavorite = vendor.isFavorite
+            
+            if let index = restaurants.firstIndex(where: { $0.backendID == backendID }) {
                 restaurants[index] = detailedVendor
             }
             return detailedVendor
@@ -299,11 +302,11 @@ final class ContentViewModel: ObservableObject {
     }
 
     func addToCart(product: Product, from vendor: Vendor, selectedOptions: [String] = [], note: String = "", quantity: Int = 1) {
-        if strictProdMode, let token = remoteAccessToken, let backendID = product.backendID {
-            print("[CartFlow] addToCart remote mode vendor=\(vendor.name) product=\(product.name) backendID=\(backendID) quantity=\(quantity)")
+        if strictProdMode, let token = remoteAccessToken, let backendID = product.backendID, let restaurantID = vendor.backendID {
+            print("[CartFlow] addToCart remote mode vendor=\(vendor.name) restaurantID=\(restaurantID) product=\(product.name) backendID=\(backendID) quantity=\(quantity)")
             Task {
                 do {
-                    try await authClient.addCartItem(accessToken: token, productID: backendID, restaurantID: vendor.backendID, quantity: quantity)
+                    try await authClient.addCartItem(accessToken: token, productID: backendID, restaurantID: restaurantID, quantity: quantity)
                     await loadCart(accessToken: token)
                 } catch {
                     await MainActor.run {
@@ -312,6 +315,9 @@ final class ContentViewModel: ObservableObject {
                     }
                 }
             }
+            return
+        } else if strictProdMode, remoteAccessToken != nil, product.backendID != nil {
+            cartErrorMessage = "Restoran kimliği bulunamadı. Ürün sepete eklenemedi."
             return
         }
 
@@ -324,10 +330,10 @@ final class ContentViewModel: ObservableObject {
         )
         refreshState()
 
-        if let token = remoteAccessToken, let backendID = product.backendID {
+        if let token = remoteAccessToken, let backendID = product.backendID, let restaurantID = vendor.backendID {
             Task {
                 do {
-                    try await authClient.addCartItem(accessToken: token, productID: backendID, restaurantID: vendor.backendID, quantity: quantity)
+                    try await authClient.addCartItem(accessToken: token, productID: backendID, restaurantID: restaurantID, quantity: quantity)
                     await loadCart(accessToken: token)
                 } catch {
                     await MainActor.run {
@@ -416,10 +422,24 @@ final class ContentViewModel: ObservableObject {
         guard !cartItems.isEmpty else { return }
 
         if let token = remoteAccessToken {
+            let addressBody = CheckoutAddressBody(
+                street: selectedAddress.line1.isEmpty ? "Atatürk Bulvarı" : selectedAddress.line1,
+                district: selectedAddress.regionLine.isEmpty ? "Merkez" : selectedAddress.regionLine,
+                city: "Antalya",
+                postalCode: "07000",
+                lat: selectedAddress.latitude ?? 36.8848,
+                lng: selectedAddress.longitude ?? 30.7056
+            )
+            let requestBody = CheckoutRequestBody(
+                deliveryAddress: addressBody,
+                paymentMethod: "CREDIT_CARD",
+                orderType: "DELIVERY",
+                notes: selectedAddress.detail
+            )
+
             Task {
                 do {
-                    _ = try await authClient.checkoutCart(accessToken: token)
-                    try? await authClient.clearCart(accessToken: token)
+                    _ = try await authClient.checkoutCart(accessToken: token, body: requestBody)
                     await loadCart(accessToken: token)
                     await loadOrders(accessToken: token)
                     await MainActor.run { onTabChange?(.orders) }
@@ -457,6 +477,7 @@ final class ContentViewModel: ObservableObject {
                 // 1. First try to find it in our current local cart (which was loaded from UserDefaults)
                 if let existingItem = self.cartItems.first(where: { $0.product.backendID == productID }) {
                     return CartItem(
+                        id: existingItem.id,
                         product: existingItem.product,
                         vendorID: existingItem.vendorID,
                         vendorName: existingItem.vendorName,
@@ -489,8 +510,13 @@ final class ContentViewModel: ObservableObject {
         } catch {
             usesRemoteCart = true
             cartItems = []
-            cartErrorMessage = error.localizedDescription
-            print("[CartFlow] loadCart failed: \(error.localizedDescription)")
+            if let authError = error as? AppAuthError, authError.statusCode == 404 {
+                cartErrorMessage = nil
+                print("[CartFlow] loadCart treated 404 as empty cart")
+            } else {
+                cartErrorMessage = error.localizedDescription
+                print("[CartFlow] loadCart failed: \(error.localizedDescription)")
+            }
         }
     }
 
@@ -617,6 +643,16 @@ final class ContentViewModel: ObservableObject {
         guard let token = remoteAccessToken, let productID = item.product.backendID else {
             return
         }
+        
+        // Optimistic UI Update
+        if let idx = cartItems.firstIndex(where: { $0.id == item.id }) {
+            if quantity <= 0 {
+                cartItems.remove(at: idx)
+            } else {
+                cartItems[idx].quantity = quantity
+            }
+        }
+        
         Task {
             do {
                 if quantity <= 0 {
@@ -693,23 +729,21 @@ final class ContentViewModel: ObservableObject {
     private func setFavoriteState(forBackendID backendID: String, isFavorite: Bool) {
         restaurants = restaurants.map { vendor in
             guard vendor.backendID == backendID else { return vendor }
-            return Vendor(
-                backendID: vendor.backendID,
-                name: vendor.name,
-                summary: vendor.summary,
-                kind: vendor.kind,
-                eta: vendor.eta,
-                rating: vendor.rating,
-                reviewCount: vendor.reviewCount,
-                minimumBasket: vendor.minimumBasket,
-                deliveryFee: vendor.deliveryFee,
-                coverNote: vendor.coverNote,
-                promoText: vendor.promoText,
-                tags: vendor.tags,
-                theme: vendor.theme,
-                isFavorite: isFavorite,
-                menuSections: vendor.menuSections
-            )
+            var updated = vendor
+            updated.isFavorite = isFavorite
+            return updated
+        }
+        markets = markets.map { vendor in
+            guard vendor.backendID == backendID else { return vendor }
+            var updated = vendor
+            updated.isFavorite = isFavorite
+            return updated
+        }
+        nearbyVendors = nearbyVendors.map { vendor in
+            guard vendor.backendID == backendID else { return vendor }
+            var updated = vendor
+            updated.isFavorite = isFavorite
+            return updated
         }
     }
 }

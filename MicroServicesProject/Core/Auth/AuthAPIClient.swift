@@ -314,8 +314,8 @@ struct AuthAPIClient {
         return response
     }
 
-    func addCartItem(accessToken: String, productID: String, restaurantID: String?, quantity: Int) async throws {
-        debugLog("POST /api/v1/cart/items productId=\(productID) quantity=\(quantity)")
+    func addCartItem(accessToken: String, productID: String, restaurantID: String, quantity: Int) async throws {
+        debugLog("POST /api/v1/cart/items productId=\(productID) restaurantId=\(restaurantID) quantity=\(quantity)")
         let _: EmptyResponse = try await sendRequest(
             path: "/api/v1/cart/items",
             method: "POST",
@@ -353,38 +353,48 @@ struct AuthAPIClient {
         )
     }
 
-    func checkoutCart(accessToken: String) async throws -> String {
-        debugLog("POST /api/v1/cart/checkout")
-        let response: GenericMessageResponse = try await sendRequest(
+    func checkoutCart(accessToken: String, body: CheckoutRequestBody) async throws -> String {
+        let idempotencyKey = "ios-\(UUID().uuidString.lowercased())"
+        debugLog("POST /api/v1/cart/checkout idempotencyKey=\(idempotencyKey)")
+        let response: CheckoutOrderResponse = try await sendRequest(
             path: "/api/v1/cart/checkout",
             method: "POST",
-            accessToken: accessToken
+            body: body,
+            accessToken: accessToken,
+            additionalHeaders: [
+                "Idempotency-Key": idempotencyKey,
+                "X-Correlation-Id": idempotencyKey
+            ]
         )
-        return response.message ?? "Checkout başlatıldı."
+        return response.resolvedOrderID ?? response.message ?? "Checkout başlatıldı."
     }
 
     private func sendRequest<Response: Decodable>(
         path: String,
         method: String,
-        accessToken: String? = nil
+        accessToken: String? = nil,
+        additionalHeaders: [String: String] = [:]
     ) async throws -> Response {
         try await sendRequest(
             url: makeURL(path: path),
             method: method,
-            accessToken: accessToken
+            accessToken: accessToken,
+            additionalHeaders: additionalHeaders
         )
     }
 
     private func sendRequest<Response: Decodable>(
         url: URL,
         method: String,
-        accessToken: String? = nil
+        accessToken: String? = nil,
+        additionalHeaders: [String: String] = [:]
     ) async throws -> Response {
         try await sendRequest(
             url: url,
             method: method,
             body: Optional<EmptyBody>.none,
-            accessToken: accessToken
+            accessToken: accessToken,
+            additionalHeaders: additionalHeaders
         )
     }
 
@@ -392,13 +402,15 @@ struct AuthAPIClient {
         path: String,
         method: String,
         body: Body? = nil,
-        accessToken: String? = nil
+        accessToken: String? = nil,
+        additionalHeaders: [String: String] = [:]
     ) async throws -> Response {
         try await sendRequest(
             url: makeURL(path: path),
             method: method,
             body: body,
-            accessToken: accessToken
+            accessToken: accessToken,
+            additionalHeaders: additionalHeaders
         )
     }
 
@@ -406,7 +418,8 @@ struct AuthAPIClient {
         url: URL,
         method: String,
         body: Body? = nil,
-        accessToken: String? = nil
+        accessToken: String? = nil,
+        additionalHeaders: [String: String] = [:]
     ) async throws -> Response {
         debugLog("HTTP \(method) \(url.absoluteString)")
         var request = URLRequest(url: url)
@@ -415,6 +428,10 @@ struct AuthAPIClient {
 
         if let accessToken {
             request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        }
+
+        for (header, value) in additionalHeaders {
+            request.setValue(value, forHTTPHeaderField: header)
         }
 
         if let body {
@@ -436,7 +453,10 @@ struct AuthAPIClient {
             if let raw = String(data: data, encoding: .utf8), !raw.isEmpty {
                 debugLog("Response error body: \(raw)")
             }
-            throw AppAuthError(message: decodeErrorMessage(from: data, statusCode: httpResponse.statusCode))
+            throw AppAuthError(
+                message: decodeErrorMessage(from: data, statusCode: httpResponse.statusCode),
+                statusCode: httpResponse.statusCode
+            )
         }
 
         if Response.self == EmptyResponse.self {
@@ -517,6 +537,12 @@ private struct EmptyResponse: Decodable {}
 
 struct AppAuthError: LocalizedError {
     let message: String
+    let statusCode: Int?
+
+    init(message: String, statusCode: Int? = nil) {
+        self.message = message
+        self.statusCode = statusCode
+    }
 
     var errorDescription: String? { message }
 }
