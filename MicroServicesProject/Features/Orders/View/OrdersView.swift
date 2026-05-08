@@ -4,6 +4,7 @@ struct OrdersView: View {
     @EnvironmentObject private var viewModel: ContentViewModel
     @EnvironmentObject private var authSession: AuthSessionViewModel
     @StateObject private var ordersViewModel = OrdersViewModel()
+    @State private var selectedOrder: Order?
 
     private var filteredOrders: [Order] {
         ordersViewModel.filteredOrders(from: viewModel.pastOrders)
@@ -104,10 +105,14 @@ struct OrdersView: View {
                                     if order.kind == .market {
                                         MarketOrderCard(order: order) {
                                             viewModel.reorder(order)
+                                        } onOpen: {
+                                            selectedOrder = order
                                         }
                                     } else {
                                         ReferenceOrderCard(order: order) {
                                             viewModel.reorder(order)
+                                        } onOpen: {
+                                            selectedOrder = order
                                         }
                                     }
                                 }
@@ -121,6 +126,9 @@ struct OrdersView: View {
                 .background(AppTheme.referenceBackground.ignoresSafeArea())
             }
             .toolbar(.hidden, for: .navigationBar)
+            .navigationDestination(item: $selectedOrder) { order in
+                OrderTrackingView(order: order)
+            }
         }
         .task {
             if let accessToken = authSession.accessToken {

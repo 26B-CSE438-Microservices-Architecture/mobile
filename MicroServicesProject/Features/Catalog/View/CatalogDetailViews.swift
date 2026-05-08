@@ -122,7 +122,10 @@ struct RestaurantDetailView: View {
     }
 
     private var currentVendorState: Vendor {
-        viewModel.allVendors.first(where: { $0.id == resolvedVendor.id }) ?? resolvedVendor
+        if let backendID = resolvedVendor.backendID {
+            return viewModel.allVendors.first(where: { $0.backendID == backendID }) ?? resolvedVendor
+        }
+        return viewModel.allVendors.first(where: { $0.id == resolvedVendor.id }) ?? resolvedVendor
     }
 }
 

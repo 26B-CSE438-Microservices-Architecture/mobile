@@ -1510,57 +1510,54 @@ struct TriangleRibbon: Shape {
 struct ReferenceOrderCard: View {
     let order: Order
     let onReorder: () -> Void
+    let onOpen: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
             HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text(order.vendorName)
-                        .font(.system(size: 23, weight: .medium))
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(order.displayTitle)
+                        .font(.system(size: 22, weight: .bold, design: .rounded))
                         .foregroundStyle(AppTheme.ink)
                         .multilineTextAlignment(.leading)
 
-                    Text(order.dateLabel)
-                        .font(.system(size: 17, weight: .regular))
+                    Text(order.displaySubtitle)
+                        .font(.system(size: 15, weight: .medium, design: .rounded))
                         .foregroundStyle(AppTheme.referenceMuted)
+                        .lineLimit(2)
 
-                    HStack(spacing: 0) {
-                        Text("Toplam: ")
-                            .foregroundStyle(AppTheme.referenceMuted)
+                    HStack(spacing: 8) {
+                        Label(order.formattedDateLabel, systemImage: "clock")
+                            .labelStyle(.titleAndIcon)
+                        Text("•")
                         Text(order.totalText)
-                            .foregroundStyle(AppTheme.orange)
                     }
-                    .font(.system(size: 17, weight: .medium))
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .foregroundStyle(AppTheme.referenceMuted)
                 }
 
                 Spacer(minLength: 14)
 
-                VStack(alignment: .trailing, spacing: 18) {
-                    Button { } label: {
-                        Image(systemName: "heart")
-                            .font(.system(size: 24, weight: .regular))
-                            .foregroundStyle(AppTheme.referenceTitle)
-                            .frame(width: 58, height: 58)
-                            .background(
-                                Circle()
-                                    .fill(Color.white)
-                                    .shadow(color: Color.black.opacity(0.08), radius: 14, y: 6)
-                            )
-                    }
-                    .buttonStyle(.plain)
+                VStack(alignment: .trailing, spacing: 14) {
+                    TagPill(
+                        text: order.statusLabel,
+                        tint: order.statusAccent.opacity(0.12),
+                        foreground: order.statusAccent
+                    )
 
-                    NavigationLink {
-                        OrderTrackingView(order: order)
-                    } label: {
-                        HStack(spacing: 6) {
-                            Text("Detaylar")
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 15, weight: .semibold))
-                        }
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundStyle(AppTheme.orange)
+                    TagPill(
+                        text: order.formattedDateLabel,
+                        tint: AppTheme.orangeSoft.opacity(0.55),
+                        foreground: AppTheme.referenceTitle
+                    )
+
+                    HStack(spacing: 6) {
+                        Text("Siparişi aç")
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 15, weight: .semibold))
                     }
-                    .buttonStyle(.plain)
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(AppTheme.orange)
                 }
             }
             .padding(.horizontal, 18)
@@ -1575,11 +1572,17 @@ struct ReferenceOrderCard: View {
                 HStack(spacing: 10) {
                     Image(systemName: "checkmark")
                         .font(.system(size: 18, weight: .bold))
-                        .foregroundStyle(AppTheme.successGreen)
+                        .foregroundStyle(order.statusAccent)
 
-                    Text("\(max(order.deliveredItemCount, 1)) Ürün Teslim Edildi")
-                        .font(.system(size: 17, weight: .medium))
-                        .foregroundStyle(AppTheme.successGreen)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(order.statusLabel)
+                            .font(.system(size: 16, weight: .bold, design: .rounded))
+                            .foregroundStyle(order.statusAccent)
+
+                        Text(order.compactDeliveredSummary)
+                            .font(.system(size: 13, weight: .medium, design: .rounded))
+                            .foregroundStyle(AppTheme.referenceMuted)
+                    }
                 }
 
                 HStack(spacing: 12) {
@@ -1621,8 +1624,8 @@ struct ReferenceOrderCard: View {
                     }
                 }
 
-                Text(order.itemSummary ?? order.defaultItemSummary)
-                    .font(.system(size: 17, weight: .regular))
+                Text(order.displaySubtitle)
+                    .font(.system(size: 15, weight: .regular, design: .rounded))
                     .foregroundStyle(AppTheme.referenceMuted)
                     .lineLimit(2)
             }
@@ -1638,52 +1641,60 @@ struct ReferenceOrderCard: View {
                         .stroke(AppTheme.cardBorder, lineWidth: 1)
                 )
         )
+        .contentShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .onTapGesture(perform: onOpen)
     }
 }
 
 struct MarketOrderCard: View {
     let order: Order
     let onReorder: () -> Void
+    let onOpen: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(alignment: .center) {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text(order.vendorName)
-                        .font(.system(size: 24, weight: .medium))
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(order.displayTitle)
+                        .font(.system(size: 22, weight: .bold, design: .rounded))
                         .foregroundStyle(AppTheme.referenceTitle)
 
-                    Text(order.dateLabel)
-                        .font(.system(size: 18, weight: .regular))
+                    Text(order.displaySubtitle)
+                        .font(.system(size: 15, weight: .medium, design: .rounded))
                         .foregroundStyle(AppTheme.referenceMuted)
+                        .lineLimit(2)
 
-                    HStack(spacing: 0) {
-                        Text("Toplam: ")
-                            .foregroundStyle(AppTheme.referenceMuted)
+                    HStack(spacing: 8) {
+                        Label(order.formattedDateLabel, systemImage: "clock")
+                            .labelStyle(.titleAndIcon)
+                        Text("•")
                         Text(order.totalText)
-                            .foregroundStyle(AppTheme.marketGreen)
                     }
-                    .font(.system(size: 18, weight: .medium))
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .foregroundStyle(AppTheme.referenceMuted)
                 }
 
-                Spacer()
+                Spacer(minLength: 12)
 
-                NavigationLink {
-                    OrderTrackingView(order: order)
-                } label: {
+                VStack(alignment: .trailing, spacing: 14) {
+                    TagPill(
+                        text: order.statusLabel,
+                        tint: order.statusAccent.opacity(0.12),
+                        foreground: order.statusAccent
+                    )
+
                     HStack(spacing: 6) {
-                        Text("Detaylar")
+                        Text("Siparişi aç")
                         Image(systemName: "chevron.right")
                             .font(.system(size: 15, weight: .semibold))
                     }
-                    .font(.system(size: 17, weight: .medium))
+                    .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(AppTheme.marketGreen)
                 }
-                .buttonStyle(.plain)
             }
             .padding(.horizontal, 18)
-            .padding(.top, 22)
-            .padding(.bottom, 18)
+            .padding(.top, 18)
+            .padding(.bottom, 16)
 
             Rectangle()
                 .fill(AppTheme.referenceDivider)
@@ -1693,11 +1704,16 @@ struct MarketOrderCard: View {
                 HStack(spacing: 10) {
                     Image(systemName: "checkmark")
                         .font(.system(size: 19, weight: .bold))
-                        .foregroundStyle(AppTheme.marketGreen)
+                        .foregroundStyle(order.statusAccent)
 
-                    Text("\(order.deliveredItemCount) Ürün Teslim Edildi")
-                        .font(.system(size: 18, weight: .medium))
-                        .foregroundStyle(AppTheme.marketGreen)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(order.statusLabel)
+                            .font(.system(size: 16, weight: .bold, design: .rounded))
+                            .foregroundStyle(order.statusAccent)
+                        Text(order.compactDeliveredSummary)
+                            .font(.system(size: 13, weight: .medium, design: .rounded))
+                            .foregroundStyle(AppTheme.referenceMuted)
+                    }
                 }
 
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -1708,8 +1724,8 @@ struct MarketOrderCard: View {
                     }
                 }
 
-                Text(order.itemSummary ?? "\(order.deliveredItemCount) Ürün Teslim Edildi")
-                    .font(.system(size: 17, weight: .regular))
+                Text(order.displaySubtitle)
+                    .font(.system(size: 15, weight: .regular, design: .rounded))
                     .foregroundStyle(AppTheme.versionText)
 
                 Button(action: onReorder) {
@@ -1741,6 +1757,8 @@ struct MarketOrderCard: View {
                         .stroke(AppTheme.cardBorder, lineWidth: 1)
                 )
         )
+        .contentShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .onTapGesture(perform: onOpen)
     }
 }
 
@@ -2340,7 +2358,6 @@ struct ActiveOrderCard: View {
                         .foregroundStyle(AppTheme.orange)
                 }
                 Spacer()
-                TagPill(text: order.etaRange, tint: AppTheme.orangeSoft)
             }
 
             ForEach(Array(order.steps.enumerated()), id: \.offset) { index, step in
@@ -2356,7 +2373,7 @@ struct ActiveOrderCard: View {
             }
 
             HStack {
-                Label(order.dateLabel, systemImage: "clock.fill")
+                Label(order.formattedDateLabel, systemImage: "clock.fill")
                 Spacer()
                 Text(order.total.formatted(.currency(code: "TRY")))
             }
@@ -2383,7 +2400,7 @@ struct OrderHistoryCard: View {
                     Text(order.vendorName)
                         .font(.system(size: 18, weight: .bold, design: .rounded))
                         .foregroundStyle(AppTheme.ink)
-                    Text(order.dateLabel)
+                    Text(order.formattedDateLabel)
                         .font(.system(size: 13, weight: .medium, design: .rounded))
                         .foregroundStyle(AppTheme.subtleText)
                 }

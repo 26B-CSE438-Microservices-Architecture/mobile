@@ -416,17 +416,34 @@ struct OrderTrackingView: View {
                     .frame(height: 210)
                     .overlay(
                         VStack(alignment: .leading, spacing: 12) {
-                            Label(orderTrackingViewModel.order.statusLabel, systemImage: "location.fill")
-                                .font(.system(size: 14, weight: .bold, design: .rounded))
-                                .foregroundStyle(AppTheme.orange)
+                            HStack(spacing: 8) {
+                                TagPill(
+                                    text: orderTrackingViewModel.order.statusLabel,
+                                    tint: orderTrackingViewModel.order.statusAccent.opacity(0.12),
+                                    foreground: orderTrackingViewModel.order.statusAccent
+                                )
+                                TagPill(
+                                    text: orderTrackingViewModel.order.formattedDateLabel,
+                                    tint: .white.opacity(0.7),
+                                    foreground: AppTheme.referenceTitle
+                                )
+                            }
 
-                            Text(orderTrackingViewModel.order.vendorName)
+                            Text(orderTrackingViewModel.order.displayTitle)
                                 .font(.system(size: 28, weight: .black, design: .rounded))
                                 .foregroundStyle(AppTheme.ink)
 
-                            Text("Tahmini teslimat: \(orderTrackingViewModel.order.etaRange)")
-                                .font(.system(size: 16, weight: .semibold, design: .rounded))
-                                .foregroundStyle(AppTheme.ink)
+                            Text(orderTrackingViewModel.order.displaySubtitle)
+                                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                                .foregroundStyle(AppTheme.referenceMuted)
+                                .lineLimit(2)
+
+                            HStack(spacing: 6) {
+                                Image(systemName: "timer")
+                                Text("Tahmini teslimat: \(orderTrackingViewModel.order.etaRange)")
+                            }
+                            .font(.system(size: 15, weight: .semibold, design: .rounded))
+                            .foregroundStyle(AppTheme.ink)
 
                             Spacer()
 
@@ -490,14 +507,23 @@ struct OrderTrackingView: View {
 
                     ForEach(Array(orderTrackingViewModel.order.steps.enumerated()), id: \.offset) { index, step in
                         HStack(alignment: .top, spacing: 12) {
-                            ZStack {
-                                Circle()
-                                    .fill(index <= orderTrackingViewModel.order.activeStep ? AppTheme.orange : AppTheme.orangeSoft)
-                                    .frame(width: 34, height: 34)
+                            VStack(spacing: 0) {
+                                ZStack {
+                                    Circle()
+                                        .fill(index <= orderTrackingViewModel.order.activeStep ? orderTrackingViewModel.order.statusAccent : AppTheme.orangeSoft)
+                                        .frame(width: 34, height: 34)
 
-                                Image(systemName: step.symbol)
-                                    .font(.system(size: 14, weight: .bold))
-                                    .foregroundStyle(index <= orderTrackingViewModel.order.activeStep ? .white : AppTheme.orange)
+                                    Image(systemName: step.symbol)
+                                        .font(.system(size: 14, weight: .bold))
+                                        .foregroundStyle(index <= orderTrackingViewModel.order.activeStep ? .white : orderTrackingViewModel.order.statusAccent)
+                                }
+
+                                if index < orderTrackingViewModel.order.steps.count - 1 {
+                                    Rectangle()
+                                        .fill(index < orderTrackingViewModel.order.activeStep ? orderTrackingViewModel.order.statusAccent.opacity(0.45) : AppTheme.referenceDivider)
+                                        .frame(width: 2, height: 30)
+                                        .padding(.vertical, 4)
+                                }
                             }
 
                             VStack(alignment: .leading, spacing: 4) {
@@ -545,23 +571,28 @@ struct OrderTrackingView: View {
                 if let accessToken = authSession.accessToken, orderTrackingViewModel.order.backendID != nil {
                     CheckoutSection(title: "Sipariş işlemleri") {
                         VStack(spacing: 10) {
-                            Button("Siparişi İptal Et") {
+                            TrackingActionButton(
+                                title: "Siparişi İptal Et",
+                                tint: AppTheme.newBadgeRed,
+                                isEnabled: viewModel.canCancel(order: orderTrackingViewModel.order)
+                            ) {
                                 Task {
                                     await viewModel.cancelOrder(orderTrackingViewModel.order, accessToken: accessToken)
                                     orderActionMessage = "İptal isteği gönderildi."
                                 }
                             }
-                            .buttonStyle(.borderedProminent)
-                            .disabled(!viewModel.canCancel(order: orderTrackingViewModel.order))
 
-                            Button("İade Talep Et") {
+                            TrackingActionButton(
+                                title: "İade Talep Et",
+                                tint: AppTheme.orange,
+                                isEnabled: viewModel.canRequestRefund(order: orderTrackingViewModel.order),
+                                isFilled: false
+                            ) {
                                 Task {
                                     await viewModel.requestRefund(orderTrackingViewModel.order, accessToken: accessToken)
                                     orderActionMessage = "İade talebi gönderildi."
                                 }
                             }
-                            .buttonStyle(.bordered)
-                            .disabled(!viewModel.canRequestRefund(order: orderTrackingViewModel.order))
 
                             if let orderActionMessage {
                                 Text(orderActionMessage)
@@ -586,5 +617,34 @@ struct OrderTrackingView: View {
             )
             orderTrackingViewModel.replace(order: detailedOrder)
         }
+    }
+}
+
+private struct TrackingActionButton: View {
+    let title: String
+    let tint: Color
+    let isEnabled: Bool
+    var isFilled: Bool = true
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 15, weight: .bold, design: .rounded))
+                .foregroundStyle(isFilled ? .white : (isEnabled ? tint : AppTheme.subtleText))
+                .frame(maxWidth: .infinity)
+                .frame(height: 48)
+                .background(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(isFilled ? (isEnabled ? tint : AppTheme.referenceDivider) : .white)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(isFilled ? .clear : (isEnabled ? tint : AppTheme.referenceDivider), lineWidth: 1.5)
+                )
+        }
+        .buttonStyle(.plain)
+        .disabled(!isEnabled)
+        .opacity(isEnabled ? 1 : 0.6)
     }
 }

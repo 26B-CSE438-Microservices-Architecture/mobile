@@ -375,7 +375,7 @@ final class ContentViewModel: ObservableObject {
             return
         }
 
-        let currentIsFavorite = allVendors.first(where: { $0.id == vendor.id })?.isFavorite ?? vendor.isFavorite
+        let currentIsFavorite = allVendors.first(where: { $0.backendID == backendID })?.isFavorite ?? vendor.isFavorite
         setFavoriteState(forBackendID: backendID, isFavorite: !currentIsFavorite)
         favoritesErrorMessage = nil
 

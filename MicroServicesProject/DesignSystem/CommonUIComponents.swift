@@ -344,6 +344,76 @@ struct EmptyStateView: View {
 }
 
 extension Order {
+    var displayTitle: String {
+        let trimmedVendorName = vendorName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmedVendorName.isEmpty ? "Sipariş" : trimmedVendorName
+    }
+
+    var displaySubtitle: String {
+        let summary = (itemSummary ?? defaultItemSummary).trimmingCharacters(in: .whitespacesAndNewlines)
+        if summary.isEmpty { return "Ürün bilgisi yok" }
+        return summary
+    }
+
+    var formattedDateLabel: String {
+        let trimmed = dateLabel.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return "Tarih yok" }
+
+        let isoWithFraction = ISO8601DateFormatter()
+        isoWithFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+
+        let isoFormatter = ISO8601DateFormatter()
+        isoFormatter.formatOptions = [.withInternetDateTime]
+
+        let localFractionFormatter = DateFormatter()
+        localFractionFormatter.locale = Locale(identifier: "en_US_POSIX")
+        localFractionFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSSSSS"
+
+        let localFormatter = DateFormatter()
+        localFormatter.locale = Locale(identifier: "en_US_POSIX")
+        localFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
+
+        let outputFormatter = DateFormatter()
+        outputFormatter.locale = Locale(identifier: "tr_TR")
+        outputFormatter.dateFormat = "d MMM yyyy, HH:mm"
+
+        if let date =
+            isoWithFraction.date(from: trimmed) ??
+            isoFormatter.date(from: trimmed) ??
+            localFractionFormatter.date(from: trimmed) ??
+            localFormatter.date(from: trimmed) {
+            return outputFormatter.string(from: date)
+        }
+
+        return trimmed
+    }
+
+    var statusAccent: Color {
+        let normalized = statusCode?.uppercased() ?? statusLabel.uppercased()
+
+        if normalized.contains("DELIVERED") || normalized.contains("PAID") {
+            return AppTheme.successGreen
+        }
+
+        if normalized.contains("CANCEL") || normalized.contains("FAILED") || normalized.contains("REJECT") || normalized.contains("REFUND") {
+            return AppTheme.newBadgeRed
+        }
+
+        return kind == .market ? AppTheme.marketGreen : AppTheme.orange
+    }
+
+    var compactDeliveredSummary: String {
+        if deliveredItemCount > 0 {
+            return "\(deliveredItemCount) ürün"
+        }
+
+        if items.count > 0 {
+            return "\(items.count) ürün"
+        }
+
+        return "Sipariş detayı"
+    }
+
     var totalText: String {
         if total == floor(total) {
             return "\(Int(total)) TL"
@@ -359,6 +429,10 @@ extension Order {
     var defaultItemSummary: String {
         if items.count == 1, let item = items.first {
             return "\(item.product.name) (\(item.quantity) Adet)"
+        }
+
+        if items.isEmpty {
+            return "Sipariş detayları görüntülenebilir"
         }
 
         return items.map { "\($0.product.name) (\($0.quantity) Adet)" }.joined(separator: ", ")
