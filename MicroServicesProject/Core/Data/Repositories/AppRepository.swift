@@ -38,7 +38,7 @@ final class MockAppRepository: AppRepository {
     private var storedActiveOrder: Order? = MockData.activeOrder
     private var storedPastOrders: [Order] = MockData.pastOrders
     private var storedCartItems: [CartItem] = []
-    private var storedSelectedAddress: Address = MockData.userProfile.addresses.first(where: { $0.isCurrent }) ?? MockData.userProfile.addresses[0]
+    private var storedSelectedAddress: Address = MockData.userProfile.addresses.first(where: { $0.isCurrent }) ?? .empty
 
     var restaurants: [Vendor] { storedRestaurants }
     var markets: [Vendor] { storedMarkets }

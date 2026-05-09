@@ -107,9 +107,9 @@ struct ReferenceTabBar: View {
                         tabRouter.selectTab(.favorites)
                     }
 
-                    ReferenceTabBarItem(
-                        title: "Sepetim",
-                        systemImage: "basket.fill",
+                    CartTabBarItem(
+                        itemCount: viewModel.cartItemCount,
+                        total: viewModel.cartTotal,
                         isSelected: tabRouter.selectedTab == .cart
                     ) {
                         tabRouter.selectTab(.cart)
@@ -166,6 +166,57 @@ struct ReferenceTabBarItem: View {
     }
 }
 
+struct CartTabBarItem: View {
+    let itemCount: Int
+    let total: Double
+    let isSelected: Bool
+    let action: () -> Void
+
+    private var formattedTotal: String {
+        let roundedTotal = Int(total.rounded())
+        return "\(roundedTotal) TL"
+    }
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 2) {
+                ZStack(alignment: .topTrailing) {
+                    Image(systemName: "basket.fill")
+                        .font(.system(size: 28, weight: .bold))
+                        .foregroundStyle(Color(red: 0.66, green: 0.66, blue: 0.66))
+                        .frame(width: 44, height: 34)
+
+                    if itemCount > 0 {
+                        Text("\(itemCount)")
+                            .font(.system(size: 13, weight: .black, design: .rounded))
+                            .foregroundStyle(.white)
+                            .frame(width: 30, height: 30)
+                            .background(AppTheme.orange, in: Circle())
+                            .offset(x: 10, y: -10)
+                    }
+                }
+                .padding(.top, 2)
+
+                if itemCount > 0 {
+                    Text(formattedTotal)
+                        .font(.system(size: 12, weight: .black, design: .rounded))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 14)
+                        .frame(height: 26)
+                        .background(AppTheme.orange, in: Capsule())
+                } else {
+                    Text("Sepetim")
+                        .font(.system(size: 10, weight: .regular))
+                        .foregroundStyle(isSelected ? AppTheme.orange : AppTheme.tabBarInactive)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
 struct AccountMenuItem: Identifiable {
     let id = UUID()
     let title: String
@@ -200,9 +251,11 @@ struct PrimaryActionButton: View {
                     .multilineTextAlignment(.leading)
                     .layoutPriority(1)
                 Spacer()
-                Text(subtitle)
-                    .font(.system(size: 15, weight: .black, design: .rounded))
-                    .fixedSize(horizontal: true, vertical: false)
+                if !subtitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    Text(subtitle)
+                        .font(.system(size: 15, weight: .black, design: .rounded))
+                        .fixedSize(horizontal: true, vertical: false)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .foregroundStyle(.white)
@@ -382,7 +435,10 @@ extension Order {
             isoFormatter.date(from: trimmed) ??
             localFractionFormatter.date(from: trimmed) ??
             localFormatter.date(from: trimmed) {
-            return outputFormatter.string(from: date)
+            let adjustedDate = trimmed.contains("T")
+                ? date.addingTimeInterval(3 * 60 * 60)
+                : date
+            return outputFormatter.string(from: adjustedDate)
         }
 
         return trimmed

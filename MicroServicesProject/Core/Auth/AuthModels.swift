@@ -189,7 +189,6 @@ private extension CurrentUserProfileResponse.AddressResponse {
         let resolvedStreet = street?.nilIfBlank ?? "Adres bilgisi yok"
         let resolvedCity = city?.nilIfBlank ?? "Şehir bilgisi yok"
         let postal = postalCode?.nilIfBlank
-        let coordinateLine = String(format: "%.4f, %.4f", lat, lng)
 
         return Address(
             id: id,
@@ -197,8 +196,8 @@ private extension CurrentUserProfileResponse.AddressResponse {
             line1: resolvedStreet,
             detail: resolvedCity,
             regionLine: resolvedCity,
-            buildingLine: postal.map { "Posta Kodu: \($0)" } ?? "Konum: \(coordinateLine)",
-            maskedPhone: contactPhone.maskedPhone,
+            buildingLine: postal.map { "Posta Kodu: \($0)" } ?? "",
+            maskedPhone: "",
             showsMapPreview: false,
             isCurrent: isCurrent,
             latitude: lat,

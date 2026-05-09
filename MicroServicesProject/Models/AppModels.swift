@@ -289,6 +289,39 @@ struct Address: Identifiable, Hashable {
         self.latitude = latitude
         self.longitude = longitude
     }
+
+    static let empty = Address(
+        id: "empty-address",
+        title: "",
+        line1: "",
+        detail: "",
+        regionLine: "",
+        buildingLine: "",
+        maskedPhone: "",
+        showsMapPreview: false,
+        isCurrent: false,
+        latitude: nil,
+        longitude: nil
+    )
+
+    var isEmpty: Bool {
+        title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+        line1.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+        detail.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    var summaryText: String {
+        if isEmpty {
+            return "Adres ekle"
+        }
+
+        let titlePart = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let detailPart = detail.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if detailPart.isEmpty { return titlePart }
+        if titlePart.isEmpty { return detailPart }
+        return "\(titlePart) (\(detailPart))"
+    }
 }
 
 struct PaymentMethod: Identifiable, Hashable {
@@ -1108,48 +1141,7 @@ enum MockData {
         phone: "+90 555 123 45 67",
         walletBalance: 245.50,
         loyaltyPoints: 420,
-        addresses: [
-            Address(
-            title: "mu house",
-            line1: "Kültür 3818. Sk. No:8 Bahtılı Köyü Köyü",
-            detail: "Kültür Mah",
-            regionLine: "Kültür Mah / Kepez / Antalya",
-            buildingLine: "Bina No: 8, Kat: 4, Daire No: 65",
-            maskedPhone: "546*****36",
-            showsMapPreview: true,
-            isCurrent: true
-        ),
-        Address(
-            title: "burak yeni ev",
-            line1: "Kültür 3814. Sk. No:3",
-            detail: "Kültür Mah",
-            regionLine: "Kültür Mah / Kepez / Antalya",
-            buildingLine: "Bina No: 3, Kat: 3, Daire No: 11",
-            maskedPhone: "546*****36",
-            showsMapPreview: false,
-            isCurrent: false
-        ),
-            Address(
-                title: "birlik apartmanı",
-                line1: "Kültür 3821. Sk. No:36 Bahtılı Köyü Köyü",
-                detail: "Kültür Mah",
-                regionLine: "Kültür Mah / Kepez / Antalya",
-                buildingLine: "Bina No: 36, Kat: 4, Daire No: 26",
-                maskedPhone: "546*****36",
-                showsMapPreview: false,
-                isCurrent: false
-            ),
-            Address(
-                title: "evumut",
-                line1: "Kültür 3814. Sk. No:5 Bahtılı Köyü Köyü",
-                detail: "Kültür Mah",
-                regionLine: "Kültür Mah / Kepez / Antalya",
-                buildingLine: "Bina No: 5, Kat: 2, Daire No: 8",
-                maskedPhone: "546*****36",
-                showsMapPreview: false,
-                isCurrent: false
-            )
-        ],
+        addresses: [],
         paymentMethods: [
             PaymentMethod(title: "Mastercard", detail: "**** 2741", isDefault: true),
             PaymentMethod(title: "Trendyol Cüzdan", detail: "Bakiye: 245,50 TL", isDefault: false)

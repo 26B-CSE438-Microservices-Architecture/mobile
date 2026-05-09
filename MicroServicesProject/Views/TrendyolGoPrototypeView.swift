@@ -45,7 +45,7 @@ struct TrendyolGoHomeHeader: View {
     let onAddressTap: () -> Void
 
     private var addressText: String {
-        "\(address.title) (\(address.detail))"
+        address.summaryText
     }
 
     var body: some View {
@@ -1552,7 +1552,7 @@ struct ReferenceOrderCard: View {
                     )
 
                     HStack(spacing: 6) {
-                        Text("Siparişi aç")
+                        Text("Detay için dokun")
                         Image(systemName: "chevron.right")
                             .font(.system(size: 15, weight: .semibold))
                     }
@@ -1684,7 +1684,7 @@ struct MarketOrderCard: View {
                     )
 
                     HStack(spacing: 6) {
-                        Text("Siparişi aç")
+                        Text("Detay için dokun")
                         Image(systemName: "chevron.right")
                             .font(.system(size: 15, weight: .semibold))
                     }
@@ -2350,12 +2350,15 @@ struct ActiveOrderCard: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(order.vendorName)
+                    Text(order.displayTitle)
                         .font(.system(size: 24, weight: .black, design: .rounded))
                         .foregroundStyle(AppTheme.ink)
-                    Text(order.statusLabel)
+                    Text(order.displaySubtitle)
                         .font(.system(size: 15, weight: .bold, design: .rounded))
                         .foregroundStyle(AppTheme.orange)
+                    Text("Detay için dokun")
+                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                        .foregroundStyle(AppTheme.subtleText)
                 }
                 Spacer()
             }

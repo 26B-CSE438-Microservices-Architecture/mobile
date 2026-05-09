@@ -35,7 +35,7 @@ struct CartView: View {
                         Text(viewModel.cartVendorName ?? "Sepet")
                             .font(.system(size: 24, weight: .bold, design: .rounded))
                             .foregroundStyle(AppTheme.ink)
-                        Text("Teslimat adresi: \(viewModel.selectedAddress.title)")
+                        Text("Teslimat adresi: \(viewModel.selectedAddress.summaryText)")
                             .font(.system(size: 14, weight: .medium, design: .rounded))
                             .foregroundStyle(AppTheme.subtleText)
                     }
@@ -107,11 +107,18 @@ struct CheckoutView: View {
             VStack(alignment: .leading, spacing: 18) {
                 CheckoutSection(title: "Teslimat adresi") {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text(viewModel.selectedAddress.title)
-                            .font(.system(size: 17, weight: .bold, design: .rounded))
-                            .foregroundStyle(AppTheme.ink)
-                        Text(viewModel.selectedAddress.line1)
-                        Text(viewModel.selectedAddress.detail)
+                        if viewModel.selectedAddress.isEmpty {
+                            Text("Henüz kayıtlı adres yok")
+                                .font(.system(size: 17, weight: .bold, design: .rounded))
+                                .foregroundStyle(AppTheme.ink)
+                            Text("Devam etmeden önce adres eklemelisin.")
+                        } else {
+                            Text(viewModel.selectedAddress.title)
+                                .font(.system(size: 17, weight: .bold, design: .rounded))
+                                .foregroundStyle(AppTheme.ink)
+                            Text(viewModel.selectedAddress.line1)
+                            Text(viewModel.selectedAddress.detail)
+                        }
                     }
                     .font(.system(size: 14, weight: .medium, design: .rounded))
                     .foregroundStyle(AppTheme.subtleText)
@@ -171,7 +178,7 @@ struct CheckoutView: View {
         .navigationBarTitleDisplayMode(.inline)
         .safeAreaInset(edge: .bottom) {
             PrimaryActionButton(
-                title: checkoutViewModel.isPreparingCheckout ? "Ödeme ekranı hazırlanıyor..." : "Hosted checkout aç",
+                title: checkoutViewModel.isPreparingCheckout ? "Ödeme ekranı hazırlanıyor..." : "Ödemeye geç",
                 subtitle: viewModel.cartTotal.formatted(.currency(code: "TRY"))
             ) {
                 guard !checkoutViewModel.isPreparingCheckout else { return }
@@ -190,9 +197,9 @@ struct CheckoutView: View {
                 onClose: {
                     checkoutViewModel.dismissHostedCheckout()
                 },
-                onCallbackIntercepted: {
+                onCallbackIntercepted: { payload in
                     Task {
-                        await checkoutViewModel.handleHostedCheckoutCallback(using: viewModel)
+                        await checkoutViewModel.handleHostedCheckoutCallback(using: viewModel, payload: payload)
                         if checkoutViewModel.hostedCheckoutSession == nil {
                             isPresented = false
                         }
@@ -213,7 +220,7 @@ private struct HostedCheckoutSheet: View {
     let session: CheckoutViewModel.HostedCheckoutSession
     let isCompleting: Bool
     let onClose: () -> Void
-    let onCallbackIntercepted: () -> Void
+    let onCallbackIntercepted: (CheckoutViewModel.HostedCheckoutCallbackPayload?) -> Void
 
     var body: some View {
         NavigationStack {
@@ -234,7 +241,7 @@ private struct HostedCheckoutSheet: View {
                         .padding(.bottom, 24)
                 }
             }
-            .navigationTitle("Hosted Checkout")
+            .navigationTitle("Ödeme Ekranı")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -248,7 +255,7 @@ private struct HostedCheckoutSheet: View {
 private struct HostedCheckoutWebView: UIViewRepresentable {
     let htmlContent: String
     let callbackURL: URL
-    let onCallbackIntercepted: () -> Void
+    let onCallbackIntercepted: (CheckoutViewModel.HostedCheckoutCallbackPayload?) -> Void
 
     func makeCoordinator() -> Coordinator {
         Coordinator(callbackURL: callbackURL, onCallbackIntercepted: onCallbackIntercepted)
@@ -256,6 +263,16 @@ private struct HostedCheckoutWebView: UIViewRepresentable {
 
     func makeUIView(context: Context) -> WKWebView {
         let configuration = WKWebViewConfiguration()
+        let contentController = WKUserContentController()
+        contentController.add(context.coordinator, name: Coordinator.messageHandlerName)
+        contentController.addUserScript(
+            WKUserScript(
+                source: context.coordinator.callbackCaptureScript,
+                injectionTime: .atDocumentEnd,
+                forMainFrameOnly: true
+            )
+        )
+        configuration.userContentController = contentController
         let webView = WKWebView(frame: .zero, configuration: configuration)
         webView.navigationDelegate = context.coordinator
         webView.loadHTMLString(htmlContent, baseURL: nil)
@@ -265,14 +282,67 @@ private struct HostedCheckoutWebView: UIViewRepresentable {
 
     func updateUIView(_ webView: WKWebView, context: Context) {}
 
-    final class Coordinator: NSObject, WKNavigationDelegate {
+    final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
+        static let messageHandlerName = "paymentCallback"
+
         private let callbackURL: URL
-        private let onCallbackIntercepted: () -> Void
+        private let onCallbackIntercepted: (CheckoutViewModel.HostedCheckoutCallbackPayload?) -> Void
         private var hasIntercepted = false
 
-        init(callbackURL: URL, onCallbackIntercepted: @escaping () -> Void) {
+        init(
+            callbackURL: URL,
+            onCallbackIntercepted: @escaping (CheckoutViewModel.HostedCheckoutCallbackPayload?) -> Void
+        ) {
             self.callbackURL = callbackURL
             self.onCallbackIntercepted = onCallbackIntercepted
+        }
+
+        var callbackCaptureScript: String {
+            let callbackURLString = callbackURL.absoluteString
+                .replacingOccurrences(of: "\\", with: "\\\\")
+                .replacingOccurrences(of: "\"", with: "\\\"")
+
+            return """
+            (function() {
+              const callbackURL = "\(callbackURLString)";
+              function sendPayload(form) {
+                try {
+                  if (!form) return false;
+                  const action = form.getAttribute('action') || '';
+                  const resolved = new URL(action, window.location.href).toString();
+                  if (resolved !== callbackURL) return false;
+                  const formData = new FormData(form);
+                  const payload = {};
+                  formData.forEach(function(value, key) {
+                    payload[key] = String(value);
+                  });
+                  window.webkit.messageHandlers.\(Self.messageHandlerName).postMessage(payload);
+                  return true;
+                } catch (error) {
+                  return false;
+                }
+              }
+              document.addEventListener('submit', function(event) {
+                if (sendPayload(event.target)) {
+                  event.preventDefault();
+                  event.stopPropagation();
+                }
+              }, true);
+              const nativeSubmit = HTMLFormElement.prototype.submit;
+              HTMLFormElement.prototype.submit = function() {
+                if (sendPayload(this)) {
+                  return;
+                }
+                return nativeSubmit.call(this);
+              };
+            })();
+            """
+        }
+
+        func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+            guard !hasIntercepted, message.name == Self.messageHandlerName else { return }
+            hasIntercepted = true
+            onCallbackIntercepted(payload(from: message.body))
         }
 
         func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
@@ -281,12 +351,36 @@ private struct HostedCheckoutWebView: UIViewRepresentable {
                url.scheme == callbackURL.scheme,
                url.host == callbackURL.host {
                 hasIntercepted = true
-                onCallbackIntercepted()
+                onCallbackIntercepted(payload(from: url))
                 decisionHandler(.cancel)
                 return
             }
 
             decisionHandler(.allow)
+        }
+
+        private func payload(from body: Any) -> CheckoutViewModel.HostedCheckoutCallbackPayload? {
+            guard let dictionary = body as? [String: Any] else { return nil }
+            let token = (dictionary["token"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let mockOutcome = (dictionary["mockOutcome"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let cardNumber = (dictionary["cardNumber"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            return CheckoutViewModel.HostedCheckoutCallbackPayload(
+                token: token,
+                mockOutcome: mockOutcome?.isEmpty == false ? mockOutcome : nil,
+                cardNumber: cardNumber?.isEmpty == false ? cardNumber : nil
+            )
+        }
+
+        private func payload(from url: URL) -> CheckoutViewModel.HostedCheckoutCallbackPayload? {
+            guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return nil }
+            let token = components.queryItems?.first(where: { $0.name == "token" })?.value ?? ""
+            let mockOutcome = components.queryItems?.first(where: { $0.name == "mockOutcome" })?.value
+            let cardNumber = components.queryItems?.first(where: { $0.name == "cardNumber" })?.value
+            return CheckoutViewModel.HostedCheckoutCallbackPayload(
+                token: token,
+                mockOutcome: mockOutcome?.isEmpty == false ? mockOutcome : nil,
+                cardNumber: cardNumber?.isEmpty == false ? cardNumber : nil
+            )
         }
     }
 }

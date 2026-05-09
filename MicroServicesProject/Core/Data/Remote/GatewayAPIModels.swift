@@ -386,14 +386,33 @@ extension HomeDiscoverResponse.ActiveOrderResponse {
 
 extension OrderSummaryResponse {
     var appOrder: Order {
-        let itemNames = (items ?? []).compactMap(\.name).filter { !$0.isEmpty }
-        let fallbackVendorName = itemNames.first ?? "Sipariş"
+        let mappedItems = (items ?? []).map { item in
+            CartItem(
+                product: Product(
+                    backendID: item.id,
+                    name: item.name ?? "Ürün",
+                    description: "Sipariş ürünü",
+                    price: item.price ?? 0,
+                    badge: nil,
+                    systemImage: "fork.knife",
+                    theme: .orange,
+                    optionGroups: []
+                ),
+                vendorID: UUID(),
+                vendorName: vendor_name ?? vendorName ?? "",
+                selectedOptions: [],
+                note: "",
+                quantity: max(1, item.quantity ?? 1)
+            )
+        }
+        let itemNames = mappedItems.map(\.product.name).filter { !$0.isEmpty }
+        let fallbackVendorName = vendor_name ?? vendorName ?? ""
         let fallbackSummary = itemNames.isEmpty ? nil : itemNames.joined(separator: ", ")
 
         return Order(
             backendID: resolvedID,
             vendorName: vendor_name ?? vendorName ?? fallbackVendorName,
-            items: [],
+            items: mappedItems,
             total: total_amount ?? total_price ?? totalAmount ?? 0,
             dateLabel: date_label ?? createdAt ?? "Geçmiş sipariş",
             statusLabel: status_label ?? prettifiedStatus(status) ?? "Sipariş",

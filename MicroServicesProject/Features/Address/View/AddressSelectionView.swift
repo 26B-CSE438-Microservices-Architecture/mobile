@@ -129,12 +129,15 @@ struct AddressSelectionView: View {
 }
 
 struct AddressDraft {
+    static let fallbackLatitude = 36.8969
+    static let fallbackLongitude = 30.7133
+
     var label: String = ""
     var street: String = ""
     var city: String = ""
     var postalCode: String = ""
-    var lat: String = "36.8969"
-    var lng: String = "30.7133"
+    var lat: String = String(format: "%.6f", AddressDraft.fallbackLatitude)
+    var lng: String = String(format: "%.6f", AddressDraft.fallbackLongitude)
 
     var isValid: Bool {
         !label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
@@ -200,16 +203,13 @@ struct AddressEditorSheet: View {
                     field("Sokak / Açık Adres", text: $draft.street)
                     field("Şehir", text: $draft.city)
                     field("Posta Kodu", text: $draft.postalCode, keyboardType: .numberPad)
-                    field("Latitude", text: $draft.lat, keyboardType: .decimalPad)
-                    field("Longitude", text: $draft.lng, keyboardType: .decimalPad)
-
                     if let localErrorMessage {
                         Text(localErrorMessage)
                             .font(.system(size: 14, weight: .semibold, design: .rounded))
                             .foregroundStyle(.red)
                     }
 
-                    PrimaryActionButton(title: "Adresi Kaydet", subtitle: authSession.isSubmitting ? "Kaydediliyor" : "Canlı API") {
+                    PrimaryActionButton(title: "Adresi Kaydet", subtitle: authSession.isSubmitting ? "Kaydediliyor" : "") {
                         submit()
                     }
                     .disabled(authSession.isSubmitting)
@@ -230,6 +230,8 @@ struct AddressEditorSheet: View {
             .task {
                 if prefillWithCurrentLocation {
                     await fillFromCurrentLocation()
+                } else {
+                    await initializeBestAvailableLocation()
                 }
             }
         }
@@ -250,7 +252,7 @@ struct AddressEditorSheet: View {
         } label: {
             HStack(spacing: 10) {
                 Image(systemName: "location.fill")
-                Text(locationService.isLoading ? "Konum alınıyor..." : "Konumumu Kullan ve Doldur")
+                Text(locationService.isLoading ? "Konum alınıyor..." : "Konumunu Kullan")
                 Spacer()
             }
             .font(.system(size: 15, weight: .bold, design: .rounded))
@@ -357,7 +359,7 @@ struct AddressEditorSheet: View {
     private func submit() {
         localErrorMessage = nil
         guard draft.isValid else {
-            localErrorMessage = "Tüm alanları doldur ve koordinatları sayısal gir."
+            localErrorMessage = "Tüm alanları doldur ve geçerli bir konum seç."
             return
         }
 
@@ -396,6 +398,32 @@ struct AddressEditorSheet: View {
         } catch {
             localErrorMessage = error.localizedDescription
         }
+    }
+
+    private func initializeBestAvailableLocation() async {
+        if let result = await locationService.requestCurrentAddressDraftIfAuthorized() {
+            draft.applyReverseGeocodedAddress(result.placemark, coordinate: result.coordinate)
+            pendingMapCenter = result.coordinate
+            cameraPosition = .region(
+                MKCoordinateRegion(
+                    center: result.coordinate,
+                    span: MKCoordinateSpan(latitudeDelta: 0.008, longitudeDelta: 0.008)
+                )
+            )
+            return
+        }
+
+        let fallback = CLLocationCoordinate2D(
+            latitude: AddressDraft.fallbackLatitude,
+            longitude: AddressDraft.fallbackLongitude
+        )
+        pendingMapCenter = fallback
+        cameraPosition = .region(
+            MKCoordinateRegion(
+                center: fallback,
+                span: MKCoordinateSpan(latitudeDelta: 0.012, longitudeDelta: 0.012)
+            )
+        )
     }
 
     private func usePendingMapCenter() async {
@@ -453,6 +481,19 @@ final class AddressLocationService: NSObject, ObservableObject, CLLocationManage
             throw AppAuthError(message: "Seçilen nokta için adres bulunamadı.")
         }
         return placemark
+    }
+
+    func requestCurrentAddressDraftIfAuthorized() async -> Result? {
+        let status = manager.authorizationStatus
+        guard status == .authorizedAlways || status == .authorizedWhenInUse else {
+            return nil
+        }
+
+        do {
+            return try await requestCurrentAddressDraft()
+        } catch {
+            return nil
+        }
     }
 
     private func requestCurrentLocation() async throws -> CLLocation {
@@ -548,14 +589,12 @@ struct AddressSelectionCard: View {
                             Text(address.line1)
                                 .font(.system(size: 12, weight: .regular))
                                 .foregroundStyle(AppTheme.referenceMuted)
-                            Text(address.buildingLine)
-                                .font(.system(size: 12, weight: .bold))
-                                .foregroundStyle(AppTheme.referenceTitle)
+                            if !address.buildingLine.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                Text(address.buildingLine)
+                                    .font(.system(size: 12, weight: .bold))
+                                    .foregroundStyle(AppTheme.referenceTitle)
+                            }
                         }
-
-                        Text(address.maskedPhone)
-                            .font(.system(size: 11.5, weight: .regular))
-                            .foregroundStyle(AppTheme.referenceMuted)
                     }
                 }
                 .padding(.horizontal, 12)

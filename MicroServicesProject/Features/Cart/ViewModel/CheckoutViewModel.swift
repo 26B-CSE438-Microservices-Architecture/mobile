@@ -3,6 +3,12 @@ import Combine
 
 @MainActor
 final class CheckoutViewModel: ObservableObject {
+    struct HostedCheckoutCallbackPayload: Equatable {
+        let token: String
+        let mockOutcome: String?
+        let cardNumber: String?
+    }
+
     struct HostedCheckoutSession: Identifiable, Equatable {
         let id: String
         let paymentID: String
@@ -98,6 +104,14 @@ final class CheckoutViewModel: ObservableObject {
 
     func startHostedCheckout(using source: ContentViewModel) async {
         guard !source.cartItems.isEmpty else { return }
+        guard !source.selectedAddress.isEmpty else {
+            banner = PaymentBanner(
+                title: "Adres gerekli",
+                message: "Ödeme ekranını açmadan önce adres eklemelisin.",
+                style: .error
+            )
+            return
+        }
 
         isPreparingCheckout = true
         banner = nil
@@ -177,7 +191,10 @@ final class CheckoutViewModel: ObservableObject {
         }
     }
 
-    func handleHostedCheckoutCallback(using source: ContentViewModel) async {
+    func handleHostedCheckoutCallback(
+        using source: ContentViewModel,
+        payload: HostedCheckoutCallbackPayload?
+    ) async {
         guard let session = hostedCheckoutSession, !isCompletingCheckout else { return }
 
         isCompletingCheckout = true
@@ -194,7 +211,22 @@ final class CheckoutViewModel: ObservableObject {
             if let token = source.remoteAccessToken {
                 request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
             }
-            request.httpBody = try JSONSerialization.data(withJSONObject: ["token": session.callbackToken])
+            let resolvedPayload = HostedCheckoutCallbackPayload(
+                token: {
+                    let candidate = payload?.token.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                    return candidate.isEmpty ? session.callbackToken : candidate
+                }(),
+                mockOutcome: payload?.mockOutcome,
+                cardNumber: payload?.cardNumber
+            )
+            var requestBody: [String: String] = ["token": resolvedPayload.token]
+            if let mockOutcome = resolvedPayload.mockOutcome {
+                requestBody["mockOutcome"] = mockOutcome
+            }
+            if let cardNumber = resolvedPayload.cardNumber {
+                requestBody["cardNumber"] = cardNumber
+            }
+            request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
 
             print("[CheckoutViewModel] HTTP \(request.httpMethod ?? "") \(request.url?.absoluteString ?? "")")
             print("[CheckoutViewModel] Headers: \(request.allHTTPHeaderFields ?? [:])")
@@ -223,7 +255,7 @@ final class CheckoutViewModel: ObservableObject {
                 hostedCheckoutSession = nil
                 banner = PaymentBanner(
                     title: "Ödeme başarılı",
-                    message: "Hosted checkout tamamlandı, sipariş oluşturuldu.",
+                    message: "Ödeme ekranı tamamlandı, sipariş oluşturuldu.",
                     style: .success
                 )
                 source.placeOrder()

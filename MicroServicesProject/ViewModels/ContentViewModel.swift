@@ -255,7 +255,7 @@ final class ContentViewModel: ObservableObject {
         do {
             let response = try await authClient.fetchOrders(accessToken: accessToken)
             usesRemoteOrders = true
-            let mappedOrders = (response.data ?? []).map(\.appOrder)
+            let mappedOrders = (response.data ?? []).map(\.appOrder).map(enrichOrderVendorNameIfNeeded)
             activeOrder = mappedOrders.first(where: \.isActive)
             pastOrders = mappedOrders.filter { !$0.isActive }
         } catch {
@@ -289,7 +289,7 @@ final class ContentViewModel: ObservableObject {
 
         do {
             let detail = try await authClient.fetchOrderDetail(accessToken: accessToken, id: backendID)
-            let detailedOrder = detail.merged(into: order)
+            let detailedOrder = enrichOrderVendorNameIfNeeded(detail.merged(into: order))
             if let index = pastOrders.firstIndex(where: { $0.id == order.id }) {
                 pastOrders[index] = detailedOrder
             } else if activeOrder?.id == order.id {
@@ -420,11 +420,15 @@ final class ContentViewModel: ObservableObject {
 
     func placeOrder() {
         guard !cartItems.isEmpty else { return }
+        guard !selectedAddress.isEmpty else {
+            cartErrorMessage = "Sipariş vermeden önce adres eklemelisin."
+            return
+        }
 
         if let token = remoteAccessToken {
             let addressBody = CheckoutAddressBody(
-                street: selectedAddress.line1.isEmpty ? "Atatürk Bulvarı" : selectedAddress.line1,
-                district: selectedAddress.regionLine.isEmpty ? "Merkez" : selectedAddress.regionLine,
+                street: selectedAddress.line1,
+                district: selectedAddress.regionLine,
                 city: "Antalya",
                 postalCode: "07000",
                 lat: selectedAddress.latitude ?? 36.8848,
@@ -568,6 +572,54 @@ final class ContentViewModel: ObservableObject {
             selectedAddress = repository.selectedAddress
             userProfile = repository.userProfile
         }
+    }
+
+    private func enrichOrderVendorNameIfNeeded(_ order: Order) -> Order {
+        let trimmedVendorName = order.vendorName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedVendorName.isEmpty {
+            return order
+        }
+
+        guard let firstProductID = order.items.first?.product.backendID,
+              let matchedVendor = allVendors.first(where: { vendor in
+                  vendor.menuSections.contains { section in
+                      section.products.contains { $0.backendID == firstProductID }
+                  }
+              }) else {
+            return order
+        }
+
+        return Order(
+            backendID: order.backendID,
+            vendorName: matchedVendor.name,
+            items: order.items.map { item in
+                CartItem(
+                    id: item.id,
+                    product: item.product,
+                    vendorID: matchedVendor.id,
+                    vendorName: matchedVendor.name,
+                    selectedOptions: item.selectedOptions,
+                    note: item.note,
+                    quantity: item.quantity
+                )
+            },
+            total: order.total,
+            dateLabel: order.dateLabel,
+            statusLabel: order.statusLabel,
+            statusCode: order.statusCode,
+            addressLine: order.addressLine,
+            etaRange: order.etaRange,
+            campaignNote: order.campaignNote,
+            courier: order.courier,
+            steps: order.steps,
+            activeStep: order.activeStep,
+            isActive: order.isActive,
+            kind: matchedVendor.kind,
+            itemSummary: order.itemSummary,
+            deliveredItemCount: order.deliveredItemCount,
+            showsRatingAction: order.showsRatingAction,
+            previewThumbnails: order.previewThumbnails
+        )
     }
 
     private func syncCartItemQuantityToRemote(_ item: CartItem) {
