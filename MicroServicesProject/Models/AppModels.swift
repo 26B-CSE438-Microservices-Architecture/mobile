@@ -553,62 +553,62 @@ enum MockData {
 
     static let homeMiniServices: [HomeMiniService] = [
         HomeMiniService(
-            title: "Petshop",
-            badgeText: "go-hızlıya",
-            artwork: .petShop,
-            imageURL: "https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+            title: "Çiğ Köfte",
+            badgeText: "popüler",
+            artwork: .cigkofte,
+            imageURL: "https://images.unsplash.com/photo-1625944230945-1b7dd3b949ab?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
         ),
         HomeMiniService(
-            title: "Gurme\nMarket",
-            badgeText: "go-hızlıya",
-            artwork: .grocery,
-            imageURL: "https://images.unsplash.com/photo-1613454320437-0c228c8b1723?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+            title: "Tost &\nSandviç",
+            badgeText: "sıcak",
+            artwork: .friedChicken,
+            imageURL: "https://images.unsplash.com/photo-1528735602780-2552fd46c7af?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
         ),
         HomeMiniService(
-            title: "Manav",
-            badgeText: "go-hızlıya",
-            artwork: .produce,
-            imageURL: "https://images.unsplash.com/photo-1590779033100-9f60a05a013d?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+            title: "Pizza",
+            badgeText: "fırsat",
+            artwork: .pizza,
+            imageURL: "https://images.unsplash.com/photo-1513104890138-7c749659a591?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
         ),
         HomeMiniService(
-            title: "Kuruyemiş",
-            badgeText: "go-hızlıya",
-            artwork: .nuts,
-            imageURL: "https://images.unsplash.com/photo-1600189020840-e9918c25269d?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+            title: "Döner",
+            badgeText: "favori",
+            artwork: .doner,
+            imageURL: "https://images.unsplash.com/photo-1529006557810-274b9b2fc783?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
         ),
         HomeMiniService(
-            title: "Çiçek",
-            badgeText: "go-hızlıya",
-            artwork: .flowers,
-            imageURL: "https://images.unsplash.com/photo-1582794543139-8ac9cb0f7b11?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+            title: "Hamburger",
+            badgeText: "çok satan",
+            artwork: .burger,
+            imageURL: "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
         )
     ]
 
     static let homeCuisines: [HomeCuisine] = [
         HomeCuisine(
-            title: "Döner",
-            imageURL: "https://images.unsplash.com/photo-1699728088614-7d1d4277414b?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080",
-            artwork: .doner
-        ),
-        HomeCuisine(
             title: "Çiğ Köfte",
-            imageURL: "https://images.unsplash.com/photo-1504674900247-0877df9cc836?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080",
+            imageURL: "https://images.unsplash.com/photo-1625944230945-1b7dd3b949ab?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080",
             artwork: .cigkofte
         ),
         HomeCuisine(
-            title: "Tatlı",
-            imageURL: "https://images.unsplash.com/photo-1705663106388-6c1c51ff5a8d?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080",
-            artwork: .baklava
-        ),
-        HomeCuisine(
-            title: "Hamburger",
-            imageURL: "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080",
-            artwork: .burger
+            title: "Tost &\nSandviç",
+            imageURL: "https://images.unsplash.com/photo-1528735602780-2552fd46c7af?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080",
+            artwork: .friedChicken
         ),
         HomeCuisine(
             title: "Pizza",
             imageURL: "https://images.unsplash.com/photo-1513104890138-7c749659a591?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080",
             artwork: .pizza
+        ),
+        HomeCuisine(
+            title: "Döner",
+            imageURL: "https://images.unsplash.com/photo-1529006557810-274b9b2fc783?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080",
+            artwork: .doner
+        ),
+        HomeCuisine(
+            title: "Hamburger",
+            imageURL: "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080",
+            artwork: .burger
         )
     ]
 

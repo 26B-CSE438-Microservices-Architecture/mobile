@@ -392,11 +392,30 @@ struct HomeMiniServiceCard: View {
             .padding(.vertical, 8)
             .padding(.trailing, 28)
 
-            HomeMiniServiceSticker(artwork: card.artwork)
+            HomeMiniServiceStickerImage(card: card)
                 .frame(width: 58, height: 44)
                 .offset(x: -2, y: -2)
         }
         .frame(width: 102, height: 88)
+    }
+}
+
+struct HomeMiniServiceStickerImage: View {
+    let card: HomeMiniService
+
+    var body: some View {
+        AsyncImage(url: URL(string: card.imageURL)) { phase in
+            switch phase {
+            case .success(let image):
+                image
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 40, height: 30)
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            default:
+                HomeMiniServiceSticker(artwork: card.artwork)
+            }
+        }
     }
 }
 
@@ -510,20 +529,23 @@ struct HomeCuisineCard: View {
     let cuisine: HomeCuisine
 
     var body: some View {
-        VStack(spacing: 7) {
+        VStack(spacing: 10) {
             HomeRemoteImage(urlString: cuisine.imageURL, artwork: cuisine.artwork)
-                .frame(width: 86, height: 86)
-                .clipShape(Circle())
+                .frame(width: 112, height: 90)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
 
             Text(cuisine.title)
-                .font(.system(size: 10, weight: .medium))
+                .font(.system(size: 18, weight: .medium))
                 .foregroundStyle(AppTheme.referenceTitle)
-                .lineLimit(1)
+                .lineLimit(2)
+                .multilineTextAlignment(.center)
+                .minimumScaleFactor(0.9)
+                .padding(.horizontal, 6)
         }
-        .frame(width: 96, height: 126)
+        .frame(width: 124, height: 160)
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color.white)
+                .fill(Color(red: 0.95, green: 0.95, blue: 0.95))
         )
     }
 }
