@@ -11,6 +11,7 @@ final class CheckoutViewModel: ObservableObject {
 
     struct HostedCheckoutSession: Identifiable, Equatable {
         let id: String
+        let sagaID: String
         let orderID: String
         let paymentID: String
         let callbackURL: URL
@@ -168,6 +169,7 @@ final class CheckoutViewModel: ObservableObject {
 
             hostedCheckoutSession = HostedCheckoutSession(
                 id: paymentID,
+                sagaID: accepted.sagaId,
                 orderID: orderID,
                 paymentID: paymentID,
                 callbackURL: resolvedCallbackURL,
@@ -240,9 +242,9 @@ final class CheckoutViewModel: ObservableObject {
                 throw CheckoutError.invalidResponse
             }
 
-            let sagaState = try await pollSagaState(sagaID: session.orderID, accessToken: source.remoteAccessToken)
+            let sagaState = try await pollSagaState(sagaID: session.sagaID, accessToken: source.remoteAccessToken)
 
-            if sagaState.status == "PaymentAuthorized" {
+            if isPaymentSuccessStatus(sagaState.status) {
                 hostedCheckoutSession = nil
                 banner = PaymentBanner(
                     title: "Ödeme başarılı",
@@ -325,7 +327,7 @@ final class CheckoutViewModel: ObservableObject {
             let state = try JSONDecoder().decode(SagaStateResponse.self, from: data)
             lastState = state
 
-            if state.checkoutForm != nil || state.status == "Failed" || state.status == "Compensated" || state.status == "PaymentAuthorized" {
+            if state.checkoutForm != nil || isTerminalStatus(state.status) {
                 return state
             }
 
@@ -378,6 +380,28 @@ final class CheckoutViewModel: ObservableObject {
         </body>
         </html>
         """
+    }
+}
+
+private extension CheckoutViewModel {
+    func isPaymentSuccessStatus(_ status: String) -> Bool {
+        [
+            "PaymentAuthorized",
+            "PaymentCompleted",
+            "Completed",
+            "OrderCreated"
+        ].contains(status)
+    }
+
+    func isTerminalStatus(_ status: String) -> Bool {
+        [
+            "Failed",
+            "Compensated",
+            "PaymentAuthorized",
+            "PaymentCompleted",
+            "Completed",
+            "OrderCreated"
+        ].contains(status)
     }
 }
 
