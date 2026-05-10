@@ -44,6 +44,14 @@ final class ContentViewModel: ObservableObject {
     private(set) var remoteAccessToken: String?
     private let strictProdMode = true
 
+    func setRemoteAccessToken(_ token: String?) {
+        remoteAccessToken = token
+    }
+
+    func clearCartError() {
+        cartErrorMessage = nil
+    }
+
     @Published var isInFoodService: Bool = false {
         didSet {
             if isInFoodService {
@@ -301,7 +309,21 @@ final class ContentViewModel: ObservableObject {
     }
 
     func addToCart(product: Product, from vendor: Vendor, selectedOptions: [String] = [], note: String = "", quantity: Int = 1) {
-        if strictProdMode, let token = remoteAccessToken, let backendID = product.backendID, let restaurantID = vendor.backendID {
+        if strictProdMode {
+            guard let token = remoteAccessToken else {
+                cartErrorMessage = "Ürün eklemek için önce giriş yapmalısın."
+                return
+            }
+            guard let backendID = product.backendID else {
+                cartErrorMessage = "Ürün kimliği bulunamadı. Lütfen menüyü yenileyip tekrar dene."
+                return
+            }
+            guard let restaurantID = vendor.backendID else {
+                cartErrorMessage = "Restoran kimliği bulunamadı. Lütfen tekrar dene."
+                return
+            }
+
+            cartErrorMessage = nil
             print("[CartFlow] addToCart remote mode vendor=\(vendor.name) restaurantID=\(restaurantID) product=\(product.name) backendID=\(backendID) quantity=\(quantity)")
             Task {
                 do {
@@ -310,13 +332,10 @@ final class ContentViewModel: ObservableObject {
                 } catch {
                     await MainActor.run {
                         print("[CartFlow] addToCart failed: \(error.localizedDescription)")
-                        cartErrorMessage = error.localizedDescription
+                        cartErrorMessage = userFacingErrorMessage(from: error, fallback: "Ürün sepete eklenemedi.")
                     }
                 }
             }
-            return
-        } else if strictProdMode, remoteAccessToken != nil, product.backendID != nil {
-            cartErrorMessage = "Restoran kimliği bulunamadı. Ürün sepete eklenemedi."
             return
         }
 

@@ -29,6 +29,7 @@ struct ContentView: View {
             viewModel.onTabChange = { tab in
                 tabRouter.selectTab(tab)
             }
+            viewModel.setRemoteAccessToken(authSession.accessToken)
             Task {
                 await viewModel.loadRemoteRestaurants()
                 if let accessToken = authSession.accessToken {
@@ -39,6 +40,7 @@ struct ContentView: View {
             }
         }
         .onReceive(authSession.$userProfile) { profile in
+            viewModel.setRemoteAccessToken(authSession.accessToken)
             if let profile {
                 viewModel.applyRemoteUserProfile(profile)
                 if let accessToken = authSession.accessToken {

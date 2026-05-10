@@ -119,6 +119,19 @@ struct RestaurantDetailView: View {
         .task {
             resolvedVendor = await viewModel.refreshVendorDetailIfNeeded(for: vendor)
         }
+        .alert(
+            "Sepet Hatası",
+            isPresented: Binding(
+                get: { viewModel.cartErrorMessage != nil },
+                set: { if !$0 { viewModel.clearCartError() } }
+            )
+        ) {
+            Button("Tamam", role: .cancel) {
+                viewModel.clearCartError()
+            }
+        } message: {
+            Text(viewModel.cartErrorMessage ?? "")
+        }
     }
 
     private var currentVendorState: Vendor {
