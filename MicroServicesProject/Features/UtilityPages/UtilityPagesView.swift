@@ -453,7 +453,7 @@ struct MarketListView: View {
 
 struct NotificationsView: View {
     private let notifications = [
-        ("Siparişin yola çıktı", "Anadolu Döner siparişin 5 dakika içinde kapında.", "bicycle.circle.fill"),
+        ("Siparişin yola çıktı", "Burger Point siparişin 5 dakika içinde kapında.", "bicycle.circle.fill"),
         ("Yeni kupon tanımlandı", "250 TL ve üzeri siparişlerde 80 TL indirim aktif.", "ticket.fill"),
         ("Favori marketinde indirim", "Fresh Market gece teslimatta ücretsiz kurye sunuyor.", "bell.badge.fill")
     ]

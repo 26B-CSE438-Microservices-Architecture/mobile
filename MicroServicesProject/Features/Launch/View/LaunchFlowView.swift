@@ -230,24 +230,27 @@ struct LaunchFlowView: View {
     }
 
     private func authModeButton(_ targetMode: AuthMode, title: String) -> some View {
-        Button(title) {
+        Button {
             mode = targetMode
             errorMessage = nil
+        } label: {
+            Text(title)
+                .font(.system(size: 15, weight: .bold, design: .rounded))
+                .foregroundStyle(mode == targetMode ? .white : AppTheme.ink)
+                .frame(maxWidth: .infinity)
+                .frame(height: 46)
+                .background(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(mode == targetMode ? AppTheme.orange : .white)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(mode == targetMode ? AppTheme.orange : AppTheme.segmentBorder, lineWidth: 1)
+                )
+                .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
         .buttonStyle(.plain)
-        .font(.system(size: 15, weight: .bold, design: .rounded))
-        .foregroundStyle(mode == targetMode ? .white : AppTheme.ink)
         .frame(maxWidth: .infinity)
-        .frame(height: 46)
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(mode == targetMode ? AppTheme.orange : .white)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(mode == targetMode ? AppTheme.orange : AppTheme.segmentBorder, lineWidth: 1)
-        )
-        .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
     private func formField(

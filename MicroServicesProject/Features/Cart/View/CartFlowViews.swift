@@ -146,15 +146,15 @@ struct CheckoutView: View {
                             .font(.system(size: 15, weight: .bold, design: .rounded))
                             .foregroundStyle(AppTheme.ink)
 
-                        Text("payment-service hosted checkout form döndürüyor. Doğru akışta mobile yalnızca bu HTML içeriğini WebView içinde render eder; kart numarası, CVC ve SKT native ekranda tutulmaz.")
+                        Text("Doğru akışta mobile önce saga checkout başlatır, gerçek order backend'de oluşur, ardından hosted ödeme formu WebView içinde açılır; kart numarası, CVC ve SKT native ekranda tutulmaz.")
                             .font(.system(size: 13, weight: .medium, design: .rounded))
                             .foregroundStyle(AppTheme.subtleText)
 
                         VStack(alignment: .leading, spacing: 8) {
-                            PaymentFlowRow(title: "1. Checkout", detail: "POST /payments ile checkout form alınıyor")
-                            PaymentFlowRow(title: "2. WebView", detail: "checkoutForm.content render ediliyor")
-                            PaymentFlowRow(title: "3. Callback", detail: "callback intercept edilip /checkout-form/callback çağrılıyor")
-                            PaymentFlowRow(title: "4. Sipariş", detail: "Payment AUTHORIZED olunca sipariş tamamlanıyor")
+                            PaymentFlowRow(title: "1. Saga", detail: "POST /saga/orders/start ile gerçek order oluşturuluyor")
+                            PaymentFlowRow(title: "2. Payment", detail: "Backend payment başlatıp checkout form döndürüyor")
+                            PaymentFlowRow(title: "3. WebView", detail: "Hosted ödeme formu WebView içinde açılıyor")
+                            PaymentFlowRow(title: "4. Callback", detail: "Token gateway saga callback endpoint'ine iletiliyor")
                         }
                     }
                 }

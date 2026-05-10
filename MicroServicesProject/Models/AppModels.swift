@@ -1132,7 +1132,7 @@ enum MockData {
         ]
     )
 
-    static let restaurants: [Vendor] = [anadoluDoner, burgerHouse, fitKitchen]
+    static let restaurants: [Vendor] = [burgerHouse, fitKitchen]
     static let markets: [Vendor] = [freshMarket, a101Kapida, waterHub]
 
     static let userProfile = UserProfile(
@@ -1149,26 +1149,26 @@ enum MockData {
     )
 
     static let activeOrder = Order(
-        vendorName: "Anadolu Döner",
+        vendorName: "Burger Point",
         items: [
             CartItem(
-                product: donerWrap,
-                vendorID: anadoluDoner.id,
-                vendorName: anadoluDoner.name,
-                selectedOptions: ["Patates", "Acı sos"],
-                note: "Bol acılı olsun",
+                product: burgerClassic,
+                vendorID: burgerHouse.id,
+                vendorName: burgerHouse.name,
+                selectedOptions: ["Cheddar", "Büyük Boy Menü"],
+                note: "Turşu olmasın",
                 quantity: 1
             ),
             CartItem(
-                product: donerIskender,
-                vendorID: anadoluDoner.id,
-                vendorName: anadoluDoner.name,
-                selectedOptions: ["Ayran"],
+                product: burgerLoadedFries,
+                vendorID: burgerHouse.id,
+                vendorName: burgerHouse.name,
+                selectedOptions: ["Ranch Sos"],
                 note: "",
                 quantity: 1
             )
         ],
-        total: 489.70,
+        total: 404.80,
         dateLabel: "Bugün, 13:05",
         statusLabel: "Kurye yolda",
         addressLine: "Kozyatağı Mah. Meltem Sok. No:18, Kadıköy",

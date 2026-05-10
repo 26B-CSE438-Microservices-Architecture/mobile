@@ -11,6 +11,7 @@ final class CheckoutViewModel: ObservableObject {
 
     struct HostedCheckoutSession: Identifiable, Equatable {
         let id: String
+        let orderID: String
         let paymentID: String
         let callbackURL: URL
         let callbackToken: String
@@ -30,52 +31,53 @@ final class CheckoutViewModel: ObservableObject {
         let style: Style
     }
 
-    private struct CreatePaymentRequest: Encodable {
-        struct Buyer: Encodable {
-            let id: String
-            let name: String
-            let surname: String
-            let email: String
-            let identityNumber: String
-            let gsmNumber: String
-            let registrationAddress: String
-            let ip: String
+    private struct StartSagaRequest: Encodable {
+        struct DeliveryAddress: Encodable {
+            let street: String
+            let district: String
             let city: String
-            let country: String
-            let zipCode: String
+            let postalCode: String
+            let lat: Double
+            let lng: Double
         }
 
-        struct Item: Encodable {
-            let id: String
-            let name: String
-            let category1: String
-            let itemType: String
-            let price: String
-        }
-
-        let orderId: String
-        let amount: Int
-        let currency: String
+        let deliveryAddress: DeliveryAddress
         let paymentMethod: String
-        let buyer: Buyer
-        let items: [Item]
-        let callbackUrl: String
+        let orderType: String
+        let notes: String
     }
 
-    private struct CreatePaymentResponse: Decodable {
-        struct Payment: Decodable {
-            let id: String
-            let status: String
-            let failureReason: String?
-        }
+    private struct StartSagaAcceptedResponse: Decodable {
+        let sagaId: String
+    }
 
+    private struct SagaStateResponse: Decodable {
         struct CheckoutForm: Decodable {
             let token: String
             let content: String
             let paymentPageUrl: String?
+
+            private enum CodingKeys: String, CodingKey {
+                case token
+                case content
+                case paymentPageUrl
+                case hostedPageUrl
+            }
+
+            init(from decoder: Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                token = try container.decode(String.self, forKey: .token)
+                content = try container.decode(String.self, forKey: .content)
+                let directURL = try container.decodeIfPresent(String.self, forKey: .paymentPageUrl)
+                let hostedURL = try container.decodeIfPresent(String.self, forKey: .hostedPageUrl)
+                paymentPageUrl = directURL ?? hostedURL
+            }
         }
 
-        let payment: Payment
+        let orderId: String?
+        let paymentId: String?
+        let status: String
+        let failureReason: String?
         let checkoutForm: CheckoutForm?
     }
 
@@ -84,16 +86,6 @@ final class CheckoutViewModel: ObservableObject {
             let message: String
         }
         let error: ErrorDetail
-    }
-
-    private struct PaymentResponse: Decodable {
-        struct Payment: Decodable {
-            let id: String
-            let status: String
-            let failureReason: String?
-        }
-
-        let payment: Payment
     }
 
     @Published private(set) var hostedCheckoutSession: HostedCheckoutSession?
@@ -120,15 +112,14 @@ final class CheckoutViewModel: ObservableObject {
         defer { isPreparingCheckout = false }
 
         do {
-            let orderID = "ord_\(UUID().uuidString.lowercased())"
-            let callbackURL = "microservicesproject://payment-callback/{paymentId}"
-            let requestBody = buildCreatePaymentRequest(orderID: orderID, callbackURL: callbackURL, source: source)
+            let idempotencyKey = "ios-\(UUID().uuidString.lowercased())"
+            let requestBody = buildStartSagaRequest(from: source)
 
-            var request = URLRequest(url: baseURL.appendingPathComponent("payments"))
+            var request = URLRequest(url: baseURL.appendingPathComponent("saga/orders/start"))
             request.httpMethod = "POST"
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            request.setValue("idem-\(UUID().uuidString.lowercased())", forHTTPHeaderField: "Idempotency-Key")
-            request.setValue(resolvedUserID(from: source), forHTTPHeaderField: "X-User-Id")
+            request.setValue(idempotencyKey, forHTTPHeaderField: "Idempotency-Key")
+            request.setValue(idempotencyKey, forHTTPHeaderField: "X-Correlation-Id")
             if let token = source.remoteAccessToken {
                 request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
             }
@@ -161,20 +152,24 @@ final class CheckoutViewModel: ObservableObject {
                 throw CheckoutError.backend("HTTP Error \(httpResponse.statusCode)")
             }
 
-            let payload = try JSONDecoder().decode(CreatePaymentResponse.self, from: data)
+            let accepted = try JSONDecoder().decode(StartSagaAcceptedResponse.self, from: data)
+            let sagaState = try await pollSagaState(sagaID: accepted.sagaId, accessToken: source.remoteAccessToken)
 
-            guard payload.payment.status == "AWAITING_FORM", let checkoutForm = payload.checkoutForm else {
-                throw CheckoutError.backend(payload.payment.failureReason ?? "Checkout form alınamadı.")
+            guard sagaState.status == "PaymentInitiated",
+                  let orderID = sagaState.orderId,
+                  let paymentID = sagaState.paymentId,
+                  let checkoutForm = sagaState.checkoutForm else {
+                throw CheckoutError.backend(sagaState.failureReason ?? "Checkout form alınamadı.")
             }
 
-            let resolvedCallbackURL = URL(string: callbackURL.replacingOccurrences(of: "{paymentId}", with: payload.payment.id))
-            guard let resolvedCallbackURL else {
+            guard let resolvedCallbackURL = callbackURL(orderID: orderID, paymentID: paymentID) else {
                 throw CheckoutError.invalidCallbackURL
             }
 
             hostedCheckoutSession = HostedCheckoutSession(
-                id: payload.payment.id,
-                paymentID: payload.payment.id,
+                id: paymentID,
+                orderID: orderID,
+                paymentID: paymentID,
                 callbackURL: resolvedCallbackURL,
                 callbackToken: checkoutForm.token,
                 pageURL: checkoutForm.paymentPageUrl.flatMap(URL.init(string:)),
@@ -204,16 +199,9 @@ final class CheckoutViewModel: ObservableObject {
         defer { isCompletingCheckout = false }
 
         do {
-            var request = URLRequest(url: baseURL
-                .appendingPathComponent("payments")
-                .appendingPathComponent(session.paymentID)
-                .appendingPathComponent("checkout-form")
-                .appendingPathComponent("callback"))
+            var request = URLRequest(url: session.callbackURL)
             request.httpMethod = "POST"
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            if let token = source.remoteAccessToken {
-                request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-            }
             let resolvedPayload = HostedCheckoutCallbackPayload(
                 token: {
                     let candidate = payload?.token.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -252,20 +240,24 @@ final class CheckoutViewModel: ObservableObject {
                 throw CheckoutError.invalidResponse
             }
 
-            let payload = try JSONDecoder().decode(PaymentResponse.self, from: data)
+            let sagaState = try await pollSagaState(sagaID: session.orderID, accessToken: source.remoteAccessToken)
 
-            if payload.payment.status == "AUTHORIZED" {
+            if sagaState.status == "PaymentAuthorized" {
                 hostedCheckoutSession = nil
                 banner = PaymentBanner(
                     title: "Ödeme başarılı",
                     message: "Ödeme ekranı tamamlandı, sipariş oluşturuldu.",
                     style: .success
                 )
-                source.placeOrder()
+                if let accessToken = source.remoteAccessToken {
+                    await source.loadCart(accessToken: accessToken)
+                    await source.loadOrders(accessToken: accessToken)
+                }
+                source.onTabChange?(.orders)
                 return
             }
 
-            throw CheckoutError.backend(payload.payment.failureReason ?? "Ödeme yetkilendirilemedi.")
+            throw CheckoutError.backend(sagaState.failureReason ?? "Ödeme yetkilendirilemedi.")
         } catch {
             banner = PaymentBanner(
                 title: "Ödeme tamamlanamadı",
@@ -279,91 +271,113 @@ final class CheckoutViewModel: ObservableObject {
         hostedCheckoutSession = nil
     }
 
-    private func buildCreatePaymentRequest(orderID: String, callbackURL: String, source: ContentViewModel) -> CreatePaymentRequest {
-        let nameParts = source.userProfile.fullName.split(separator: " ")
-        let firstName = nameParts.first.map { String($0) } ?? "Test"
-        let surnameValue = nameParts.dropFirst().map { String($0) }.joined(separator: " ")
-        let surname = surnameValue.isEmpty ? "User" : surnameValue
-        let addressLine = "\(source.selectedAddress.line1), \(source.selectedAddress.detail)"
-        let itemTotal = source.cartItems.reduce(0) { partial, item in
-            partial + (item.product.price * Double(item.quantity))
-        }
-
-        let items = source.cartItems.map { item in
-            CreatePaymentRequest.Item(
-                id: item.product.backendID ?? item.product.id.uuidString.lowercased(),
-                name: item.product.name,
-                category1: source.cartVendor?.kind == .market ? "Market" : "Food",
-                itemType: "PHYSICAL",
-                price: (item.product.price * Double(item.quantity))
-                    .formatted(.number.precision(.fractionLength(2)).locale(Locale(identifier: "en_US_POSIX")))
-            )
-        }
-
-        return CreatePaymentRequest(
-            orderId: orderID,
-            amount: Int((itemTotal * 100).rounded()),
-            currency: "TRY",
-            paymentMethod: "card",
-            buyer: .init(
-                id: resolvedUserID(from: source),
-                name: firstName,
-                surname: surname,
-                email: source.userProfile.email,
-                identityNumber: resolvedIdentityNumber(from: source),
-                gsmNumber: normalizedPhoneNumber(source.userProfile.phone),
-                registrationAddress: addressLine,
-                ip: "85.105.0.1",
-                city: "Istanbul",
-                country: "TR",
-                zipCode: "34000"
+    private func buildStartSagaRequest(from source: ContentViewModel) -> StartSagaRequest {
+        StartSagaRequest(
+            deliveryAddress: .init(
+                street: source.selectedAddress.line1,
+                district: source.selectedAddress.regionLine,
+                city: "Antalya",
+                postalCode: "07000",
+                lat: source.selectedAddress.latitude ?? 36.8848,
+                lng: source.selectedAddress.longitude ?? 30.7056
             ),
-            items: items,
-            callbackUrl: callbackURL
+            paymentMethod: "CREDIT_CARD",
+            orderType: "DELIVERY",
+            notes: source.selectedAddress.detail
         )
     }
 
-    private func resolvedUserID(from source: ContentViewModel) -> String {
-        let trimmedEmail = source.userProfile.email.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !trimmedEmail.isEmpty {
-            return trimmedEmail.lowercased()
-        }
-
-        let compactName = source.userProfile.fullName
-            .lowercased()
-            .components(separatedBy: CharacterSet.alphanumerics.inverted)
-            .joined()
-        return compactName.isEmpty ? UUID().uuidString.lowercased() : compactName
+    private func callbackURL(orderID: String, paymentID: String) -> URL? {
+        baseURL
+            .appendingPathComponent("saga/orders")
+            .appendingPathComponent(orderID)
+            .appendingPathComponent("payment-callback")
+            .appendingPathComponent(paymentID)
     }
 
-    private func normalizedPhoneNumber(_ phone: String) -> String {
-        let digits = phone.filter(\.isNumber)
-        if digits.hasPrefix("90"), digits.count >= 12 {
-            return "+\(digits)"
-        }
-        if digits.hasPrefix("0"), digits.count == 11 {
-            return "+9\(digits)"
-        }
-        if digits.count == 10 {
-            return "+90\(digits)"
-        }
-        return phone.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
+    private func pollSagaState(sagaID: String, accessToken: String?) async throws -> SagaStateResponse {
+        var lastState: SagaStateResponse?
 
-    private func resolvedIdentityNumber(from source: ContentViewModel) -> String {
-        let digits = source.userProfile.phone.filter(\.isNumber)
-        if digits.count >= 11 {
-            return String(digits.suffix(11))
+        for _ in 0..<40 {
+            var request = URLRequest(url: baseURL.appendingPathComponent("saga/orders").appendingPathComponent(sagaID))
+            request.httpMethod = "GET"
+            if let accessToken {
+                request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+            }
+
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw CheckoutError.invalidResponse
+            }
+
+            if httpResponse.statusCode == 404 {
+                try await Task.sleep(nanoseconds: 500_000_000)
+                continue
+            }
+
+            guard (200...299).contains(httpResponse.statusCode) else {
+                if let gatewayError = try? JSONDecoder().decode(GatewayErrorResponse.self, from: data) {
+                    throw CheckoutError.backend(gatewayError.error.message)
+                }
+                throw CheckoutError.backend("HTTP Error \(httpResponse.statusCode)")
+            }
+
+            let state = try JSONDecoder().decode(SagaStateResponse.self, from: data)
+            lastState = state
+
+            if state.checkoutForm != nil || state.status == "Failed" || state.status == "Compensated" || state.status == "PaymentAuthorized" {
+                return state
+            }
+
+            try await Task.sleep(nanoseconds: 500_000_000)
         }
-        return "11111111111"
+
+        if let lastState {
+            return lastState
+        }
+
+        throw CheckoutError.backend("SAGA durumu zamanında hazır olmadı.")
     }
 
     private func decodeCheckoutHTML(from content: String) -> String {
+        let rawHTML: String
         if let data = Data(base64Encoded: content), let html = String(data: data, encoding: .utf8) {
-            return html
+            rawHTML = html
+        } else {
+            rawHTML = content
         }
 
-        return content
+        if rawHTML.range(of: "<html", options: .caseInsensitive) != nil {
+            return rawHTML
+        }
+
+        return """
+        <!DOCTYPE html>
+        <html lang="tr">
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+          <style>
+            html, body {
+              margin: 0;
+              padding: 0;
+              min-height: 100%;
+              background: #ffffff;
+            }
+            body {
+              display: block;
+            }
+            #iyzipay-checkout-form {
+              min-height: 100vh;
+            }
+          </style>
+        </head>
+        <body>
+          <div id="iyzipay-checkout-form" class="responsive"></div>
+          \(rawHTML)
+        </body>
+        </html>
+        """
     }
 }
 
