@@ -2501,7 +2501,6 @@ struct CartItemRow: View {
 struct PriceSummaryCard: View {
     let subtotal: Double
     let delivery: Double
-    let service: Double
     let discount: Double
     let total: Double
 
@@ -2509,7 +2508,6 @@ struct PriceSummaryCard: View {
         VStack(spacing: 12) {
             SummaryRow(label: "Ara toplam", value: subtotal)
             SummaryRow(label: "Teslimat", value: delivery)
-            SummaryRow(label: "Servis", value: service)
             SummaryRow(label: "İndirim", value: -discount, isDiscount: true)
 
             Divider()

@@ -14,6 +14,7 @@ final class CheckoutViewModel: ObservableObject {
         let paymentID: String
         let callbackURL: URL
         let callbackToken: String
+        let pageURL: URL?
         let htmlContent: String
     }
 
@@ -71,6 +72,7 @@ final class CheckoutViewModel: ObservableObject {
         struct CheckoutForm: Decodable {
             let token: String
             let content: String
+            let paymentPageUrl: String?
         }
 
         let payment: Payment
@@ -100,9 +102,9 @@ final class CheckoutViewModel: ObservableObject {
     @Published private(set) var banner: PaymentBanner?
 
     private let baseURL = URL(string: "https://gw.cse.akdeniz.edu.tr/cse-438/api/v1")!
-    private let demoUserID = "ios_demo_user"
 
     func startHostedCheckout(using source: ContentViewModel) async {
+        guard !isPreparingCheckout, hostedCheckoutSession == nil else { return }
         guard !source.cartItems.isEmpty else { return }
         guard !source.selectedAddress.isEmpty else {
             banner = PaymentBanner(
@@ -126,7 +128,7 @@ final class CheckoutViewModel: ObservableObject {
             request.httpMethod = "POST"
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             request.setValue("idem-\(UUID().uuidString.lowercased())", forHTTPHeaderField: "Idempotency-Key")
-            request.setValue(demoUserID, forHTTPHeaderField: "X-User-Id")
+            request.setValue(resolvedUserID(from: source), forHTTPHeaderField: "X-User-Id")
             if let token = source.remoteAccessToken {
                 request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
             }
@@ -175,6 +177,7 @@ final class CheckoutViewModel: ObservableObject {
                 paymentID: payload.payment.id,
                 callbackURL: resolvedCallbackURL,
                 callbackToken: checkoutForm.token,
+                pageURL: checkoutForm.paymentPageUrl.flatMap(URL.init(string:)),
                 htmlContent: decodeCheckoutHTML(from: checkoutForm.content)
             )
             banner = PaymentBanner(
@@ -282,6 +285,9 @@ final class CheckoutViewModel: ObservableObject {
         let surnameValue = nameParts.dropFirst().map { String($0) }.joined(separator: " ")
         let surname = surnameValue.isEmpty ? "User" : surnameValue
         let addressLine = "\(source.selectedAddress.line1), \(source.selectedAddress.detail)"
+        let itemTotal = source.cartItems.reduce(0) { partial, item in
+            partial + (item.product.price * Double(item.quantity))
+        }
 
         let items = source.cartItems.map { item in
             CreatePaymentRequest.Item(
@@ -289,31 +295,67 @@ final class CheckoutViewModel: ObservableObject {
                 name: item.product.name,
                 category1: source.cartVendor?.kind == .market ? "Market" : "Food",
                 itemType: "PHYSICAL",
-                price: item.product.price.formatted(.number.precision(.fractionLength(2)).locale(Locale(identifier: "en_US_POSIX")))
+                price: (item.product.price * Double(item.quantity))
+                    .formatted(.number.precision(.fractionLength(2)).locale(Locale(identifier: "en_US_POSIX")))
             )
         }
 
         return CreatePaymentRequest(
             orderId: orderID,
-            amount: Int((source.cartTotal * 100).rounded()),
+            amount: Int((itemTotal * 100).rounded()),
             currency: "TRY",
             paymentMethod: "card",
             buyer: .init(
-                id: demoUserID,
+                id: resolvedUserID(from: source),
                 name: firstName,
                 surname: surname,
                 email: source.userProfile.email,
-                identityNumber: "74300864791",
-                gsmNumber: source.userProfile.phone,
+                identityNumber: resolvedIdentityNumber(from: source),
+                gsmNumber: normalizedPhoneNumber(source.userProfile.phone),
                 registrationAddress: addressLine,
-                ip: "127.0.0.1",
+                ip: "85.105.0.1",
                 city: "Istanbul",
-                country: "Turkey",
+                country: "TR",
                 zipCode: "34000"
             ),
             items: items,
             callbackUrl: callbackURL
         )
+    }
+
+    private func resolvedUserID(from source: ContentViewModel) -> String {
+        let trimmedEmail = source.userProfile.email.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedEmail.isEmpty {
+            return trimmedEmail.lowercased()
+        }
+
+        let compactName = source.userProfile.fullName
+            .lowercased()
+            .components(separatedBy: CharacterSet.alphanumerics.inverted)
+            .joined()
+        return compactName.isEmpty ? UUID().uuidString.lowercased() : compactName
+    }
+
+    private func normalizedPhoneNumber(_ phone: String) -> String {
+        let digits = phone.filter(\.isNumber)
+        if digits.hasPrefix("90"), digits.count >= 12 {
+            return "+\(digits)"
+        }
+        if digits.hasPrefix("0"), digits.count == 11 {
+            return "+9\(digits)"
+        }
+        if digits.count == 10 {
+            return "+90\(digits)"
+        }
+        return phone.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func resolvedIdentityNumber(from source: ContentViewModel) -> String {
+        let digits = source.userProfile.phone.filter(\.isNumber)
+        if digits.count >= 11 {
+            return String(digits.suffix(11))
+        }
+        return "11111111111"
     }
 
     private func decodeCheckoutHTML(from content: String) -> String {

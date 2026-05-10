@@ -31,13 +31,30 @@ struct CartView: View {
                 .padding(.top, 80)
             } else {
                 VStack(alignment: .leading, spacing: 18) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(viewModel.cartVendorName ?? "Sepet")
-                            .font(.system(size: 24, weight: .bold, design: .rounded))
-                            .foregroundStyle(AppTheme.ink)
-                        Text("Teslimat adresi: \(viewModel.selectedAddress.summaryText)")
-                            .font(.system(size: 14, weight: .medium, design: .rounded))
-                            .foregroundStyle(AppTheme.subtleText)
+                    HStack(alignment: .top) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(viewModel.cartVendorName ?? "Sepet")
+                                .font(.system(size: 24, weight: .bold, design: .rounded))
+                                .foregroundStyle(AppTheme.ink)
+                            Text("Teslimat adresi: \(viewModel.selectedAddress.summaryText)")
+                                .font(.system(size: 14, weight: .medium, design: .rounded))
+                                .foregroundStyle(AppTheme.subtleText)
+                        }
+
+                        Spacer()
+
+                        Button("Sepeti Temizle") {
+                            viewModel.clearCart()
+                        }
+                        .buttonStyle(.plain)
+                        .font(.system(size: 14, weight: .bold, design: .rounded))
+                        .foregroundStyle(AppTheme.orange)
+                        .padding(.horizontal, 14)
+                        .frame(height: 38)
+                        .background(
+                            Capsule()
+                                .fill(AppTheme.orangeSoft)
+                        )
                     }
 
                     VStack(spacing: 12) {
@@ -49,7 +66,6 @@ struct CartView: View {
                     PriceSummaryCard(
                         subtotal: viewModel.cartSubtotal,
                         delivery: viewModel.cartDeliveryFee,
-                        service: viewModel.cartServiceFee,
                         discount: viewModel.cartDiscount,
                         total: viewModel.cartTotal
                     )
@@ -147,22 +163,19 @@ struct CheckoutView: View {
                     PriceSummaryCard(
                         subtotal: viewModel.cartSubtotal,
                         delivery: viewModel.cartDeliveryFee,
-                        service: viewModel.cartServiceFee,
                         discount: viewModel.cartDiscount,
                         total: viewModel.cartTotal
                     )
                 }
 
-                CheckoutSection(title: "Demo notları") {
+                CheckoutSection(title: "Ödeme notları") {
                     VStack(alignment: .leading, spacing: 10) {
-                        Text("Bu ekran local Docker üstündeki payment-service mock provider’ına bağlanır. Test kartları hosted form içinde hazır gelir.")
+                        Text("Ödeme formu servis tarafından üretilir ve WebView içinde açılır. Kart alanları native uygulamada tutulmaz.")
                             .font(.system(size: 13, weight: .medium, design: .rounded))
                             .foregroundStyle(AppTheme.subtleText)
 
-                        PaymentTestHint(text: "Başarılı kart: 5528 7900 0000 0008")
-                        PaymentTestHint(text: "Declined: 4111 1111 1111 1129")
-                        PaymentTestHint(text: "Insufficient: 4111 1111 1111 1111")
-                        PaymentTestHint(text: "Expired: 4111 1111 1111 1100")
+                        PaymentTestHint(text: "Toplam tutar ödeme isteğinde sepet kalemlerinin toplamından üretilir.")
+                        PaymentTestHint(text: "Checkout tamamlanınca callback ile payment durumu doğrulanır.")
                     }
                 }
 
@@ -186,6 +199,8 @@ struct CheckoutView: View {
                     await checkoutViewModel.startHostedCheckout(using: viewModel)
                 }
             }
+            .disabled(checkoutViewModel.isPreparingCheckout || checkoutViewModel.hostedCheckoutSession != nil)
+            .opacity((checkoutViewModel.isPreparingCheckout || checkoutViewModel.hostedCheckoutSession != nil) ? 0.7 : 1)
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
             .background(.ultraThinMaterial)
@@ -226,6 +241,7 @@ private struct HostedCheckoutSheet: View {
         NavigationStack {
             ZStack(alignment: .bottom) {
                 HostedCheckoutWebView(
+                    pageURL: session.pageURL,
                     htmlContent: session.htmlContent,
                     callbackURL: session.callbackURL,
                     onCallbackIntercepted: onCallbackIntercepted
@@ -253,6 +269,7 @@ private struct HostedCheckoutSheet: View {
 }
 
 private struct HostedCheckoutWebView: UIViewRepresentable {
+    let pageURL: URL?
     let htmlContent: String
     let callbackURL: URL
     let onCallbackIntercepted: (CheckoutViewModel.HostedCheckoutCallbackPayload?) -> Void
@@ -275,7 +292,11 @@ private struct HostedCheckoutWebView: UIViewRepresentable {
         configuration.userContentController = contentController
         let webView = WKWebView(frame: .zero, configuration: configuration)
         webView.navigationDelegate = context.coordinator
-        webView.loadHTMLString(htmlContent, baseURL: nil)
+        if let pageURL {
+            webView.load(URLRequest(url: pageURL))
+        } else {
+            webView.loadHTMLString(htmlContent, baseURL: URL(string: "https://sandbox-cpp.iyzipay.com"))
+        }
         webView.scrollView.contentInsetAdjustmentBehavior = .never
         return webView
     }
@@ -736,6 +757,7 @@ private struct TrackingActionButton: View {
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
                         .stroke(isFilled ? .clear : (isEnabled ? tint : AppTheme.referenceDivider), lineWidth: 1.5)
                 )
+                .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
         .buttonStyle(.plain)
         .disabled(!isEnabled)

@@ -1138,7 +1138,7 @@ enum MockData {
     static let userProfile = UserProfile(
         fullName: "Samet Bilgin",
         email: "samet@example.com",
-        phone: "+90 555 123 45 67",
+        phone: "",
         walletBalance: 245.50,
         loyaltyPoints: 420,
         addresses: [],
@@ -1178,7 +1178,7 @@ enum MockData {
             name: "Mert K.",
             vehicle: "Motosiklet",
             plate: "34 TGO 145",
-            phone: "+90 555 845 22 14",
+            phone: "",
             etaNote: "5 dakika içinde teslim edecek"
         ),
         steps: [

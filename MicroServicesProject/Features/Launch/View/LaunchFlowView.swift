@@ -17,7 +17,7 @@ struct LaunchFlowView: View {
     @State private var introIndex = 0
     @State private var name = ""
     @State private var surname = ""
-    @State private var phoneNumber = "+90 555 123 45 67"
+    @State private var phoneNumber = ""
     @State private var email = ""
     @State private var password = ""
     @State private var confirmPassword = ""
@@ -247,6 +247,7 @@ struct LaunchFlowView: View {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .stroke(mode == targetMode ? AppTheme.orange : AppTheme.segmentBorder, lineWidth: 1)
         )
+        .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
     private func formField(

@@ -120,16 +120,12 @@ final class ContentViewModel: ObservableObject {
         cartVendor?.deliveryFee ?? 0
     }
 
-    var cartServiceFee: Double {
-        cartItems.isEmpty ? 0 : 8.99
-    }
-
     var cartDiscount: Double {
         cartSubtotal >= 300 ? 40 : 0
     }
 
     var cartTotal: Double {
-        max(0, cartSubtotal + cartDeliveryFee + cartServiceFee - cartDiscount)
+        max(0, cartSubtotal + cartDeliveryFee - cartDiscount)
     }
 
     func selectAddress(_ address: Address) {
@@ -345,10 +341,8 @@ final class ContentViewModel: ObservableObject {
     }
 
     func incrementQuantity(for item: CartItem) {
-        if strictProdMode, remoteAccessToken != nil {
-            let currentQuantity = cartItems.first(where: { $0.id == item.id })?.quantity ?? item.quantity
-            let target = currentQuantity + 1
-            updateRemoteCartItem(item, quantity: target)
+        if strictProdMode, let token = remoteAccessToken {
+            incrementRemoteCartItem(item, accessToken: token)
             return
         }
         repository.incrementQuantity(for: item)
@@ -357,15 +351,36 @@ final class ContentViewModel: ObservableObject {
     }
 
     func decrementQuantity(for item: CartItem) {
-        if strictProdMode, remoteAccessToken != nil {
-            let currentQuantity = cartItems.first(where: { $0.id == item.id })?.quantity ?? item.quantity
-            let target = max(0, currentQuantity - 1)
-            updateRemoteCartItem(item, quantity: target)
+        if strictProdMode, let token = remoteAccessToken {
+            decrementRemoteCartItem(item, accessToken: token)
             return
         }
         repository.decrementQuantity(for: item)
         refreshState()
         syncCartItemQuantityToRemote(item)
+    }
+
+    func clearCart() {
+        if strictProdMode, let token = remoteAccessToken {
+            let previousItems = cartItems
+            cartItems = []
+
+            Task {
+                do {
+                    try await authClient.clearCart(accessToken: token)
+                    await loadCart(accessToken: token)
+                } catch {
+                    await MainActor.run {
+                        self.cartItems = previousItems
+                        self.cartErrorMessage = error.localizedDescription
+                    }
+                }
+            }
+            return
+        }
+
+        cartItems.removeAll()
+        refreshState()
     }
 
     func toggleFavorite(for vendor: Vendor, accessToken: String?) async {
@@ -691,30 +706,68 @@ final class ContentViewModel: ObservableObject {
             .uppercased()
     }
 
-    private func updateRemoteCartItem(_ item: CartItem, quantity: Int) {
-        guard let token = remoteAccessToken, let productID = item.product.backendID else {
+    private func incrementRemoteCartItem(_ item: CartItem, accessToken: String) {
+        guard let productID = item.product.backendID else {
             return
         }
-        
-        // Optimistic UI Update
+
+        let previousItems = cartItems
+        let currentQuantity = cartItems.first(where: { $0.id == item.id })?.quantity ?? item.quantity
+        let targetQuantity = currentQuantity + 1
+
         if let idx = cartItems.firstIndex(where: { $0.id == item.id }) {
-            if quantity <= 0 {
-                cartItems.remove(at: idx)
-            } else {
-                cartItems[idx].quantity = quantity
-            }
+            cartItems[idx].quantity = targetQuantity
         }
-        
+
+        print("[CartFlow] incrementRemoteCartItem productID=\(productID) current=\(currentQuantity) target=\(targetQuantity)")
+
         Task {
             do {
-                if quantity <= 0 {
-                    try await authClient.deleteCartItem(accessToken: token, productID: productID)
-                } else {
-                    try await authClient.updateCartItem(accessToken: token, productID: productID, quantity: quantity)
-                }
-                await loadCart(accessToken: token)
+                try await authClient.updateCartItem(
+                    accessToken: accessToken,
+                    productID: productID,
+                    quantity: targetQuantity
+                )
+                await loadCart(accessToken: accessToken)
             } catch {
                 await MainActor.run {
+                    self.cartItems = previousItems
+                    cartErrorMessage = error.localizedDescription
+                }
+            }
+        }
+    }
+
+    private func decrementRemoteCartItem(_ item: CartItem, accessToken: String) {
+        guard let productID = item.product.backendID else {
+            return
+        }
+
+        let previousItems = cartItems
+        let currentQuantity = cartItems.first(where: { $0.id == item.id })?.quantity ?? item.quantity
+        let targetQuantity = max(0, currentQuantity - 1)
+
+        if let idx = cartItems.firstIndex(where: { $0.id == item.id }) {
+            if targetQuantity == 0 {
+                cartItems.remove(at: idx)
+            } else {
+                cartItems[idx].quantity = targetQuantity
+            }
+        }
+
+        print("[CartFlow] decrementRemoteCartItem productID=\(productID) current=\(currentQuantity) target=\(targetQuantity)")
+
+        Task {
+            do {
+                try await authClient.updateCartItem(
+                    accessToken: accessToken,
+                    productID: productID,
+                    quantity: targetQuantity
+                )
+                await loadCart(accessToken: accessToken)
+            } catch {
+                await MainActor.run {
+                    self.cartItems = previousItems
                     cartErrorMessage = error.localizedDescription
                 }
             }

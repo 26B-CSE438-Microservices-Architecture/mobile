@@ -41,6 +41,7 @@ struct OrdersSegmentButton: View {
                                 .fill(Color.white)
                         )
                 )
+                .contentShape(RoundedRectangle(cornerRadius: 25, style: .continuous))
         }
         .buttonStyle(.plain)
     }
@@ -262,6 +263,7 @@ struct PrimaryActionButton: View {
             .padding(.horizontal, 18)
             .padding(.vertical, 16)
             .background(AppTheme.orange, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
         }
         .buttonStyle(.plain)
         .frame(maxWidth: .infinity)
@@ -297,6 +299,7 @@ struct CounterButton: View {
                 .foregroundStyle(AppTheme.orange)
                 .frame(width: 28, height: 28)
                 .background(AppTheme.orangeSoft, in: Circle())
+                .contentShape(Circle())
         }
         .buttonStyle(.plain)
     }

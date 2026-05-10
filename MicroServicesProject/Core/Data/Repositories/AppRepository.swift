@@ -157,7 +157,7 @@ final class MockAppRepository: AppRepository {
                 name: "Kurye Atanıyor",
                 vehicle: "Motosiklet",
                 plate: "--",
-                phone: "+90 555 000 00 00",
+                phone: "",
                 etaNote: "Hazırlık tamamlandığında kurye bilgisi güncellenecek"
             ),
             steps: [
