@@ -159,6 +159,7 @@ final class ContentViewModel: ObservableObject {
 
     func loadRemoteRestaurants() async {
         isLoadingRemoteRestaurants = true
+        homeErrorMessage = nil
         defer { isLoadingRemoteRestaurants = false }
 
         do {
@@ -168,7 +169,9 @@ final class ContentViewModel: ObservableObject {
                 restaurants = remoteRestaurants
             }
         } catch {
-            // Keep mock restaurant data if the live endpoint fails.
+            usesRemoteRestaurants = true
+            restaurants = []
+            homeErrorMessage = userFacingErrorMessage(from: error, fallback: "Restoran servisine ulaşılamadı.")
         }
     }
 
@@ -191,7 +194,7 @@ final class ContentViewModel: ObservableObject {
             }
             mergeRemoteVendors(response.featured_vendors.map(\.appVendor))
         } catch {
-            homeErrorMessage = error.localizedDescription
+            homeErrorMessage = userFacingErrorMessage(from: error, fallback: "Anasayfa verileri alınamadı.")
         }
     }
 
@@ -240,7 +243,7 @@ final class ContentViewModel: ObservableObject {
             mergeRemoteVendors(favoriteVendors)
             applyFavoriteVendorIDs(Set(response.data.map(\.vendor_id)))
         } catch {
-            favoritesErrorMessage = error.localizedDescription
+            favoritesErrorMessage = userFacingErrorMessage(from: error, fallback: "Favoriler alınamadı.")
         }
     }
 
@@ -255,7 +258,7 @@ final class ContentViewModel: ObservableObject {
             activeOrder = mappedOrders.first(where: \.isActive)
             pastOrders = mappedOrders.filter { !$0.isActive }
         } catch {
-            ordersErrorMessage = error.localizedDescription
+            ordersErrorMessage = userFacingErrorMessage(from: error, fallback: "Sipariş servisine ulaşılamadı.")
         }
     }
 
@@ -408,29 +411,26 @@ final class ContentViewModel: ObservableObject {
     }
 
     func reorder(_ order: Order) {
-        if let token = remoteAccessToken, let backendID = order.backendID {
-            Task {
-                do {
-                    _ = try await authClient.reorderOrder(accessToken: token, id: backendID)
-                    await loadCart(accessToken: token)
-                    await MainActor.run { onTabChange?(.home) }
-                } catch {
-                    await MainActor.run {
-                        ordersErrorMessage = error.localizedDescription
-                        if !strictProdMode {
-                            repository.reorder(order)
-                            refreshState()
-                            onTabChange?(.home)
-                        }
-                    }
-                }
-            }
+        guard let token = remoteAccessToken else {
+            ordersErrorMessage = "Tekrar sipariş için giriş yapmalısın."
+            return
+        }
+        guard let backendID = order.backendID else {
+            ordersErrorMessage = "Bu sipariş tekrar işlemi için uygun değil."
             return
         }
 
-        repository.reorder(order)
-        refreshState()
-        onTabChange?(.home)
+        Task {
+            do {
+                _ = try await authClient.reorderOrder(accessToken: token, id: backendID)
+                await loadCart(accessToken: token)
+                await MainActor.run { onTabChange?(.home) }
+            } catch {
+                await MainActor.run {
+                    ordersErrorMessage = userFacingErrorMessage(from: error, fallback: "Tekrar sipariş işlemi başarısız.")
+                }
+            }
+        }
     }
 
     func placeOrder() {
@@ -440,45 +440,37 @@ final class ContentViewModel: ObservableObject {
             return
         }
 
-        if let token = remoteAccessToken {
-            let addressBody = CheckoutAddressBody(
-                street: selectedAddress.line1,
-                district: selectedAddress.regionLine,
-                city: "Antalya",
-                postalCode: "07000",
-                lat: selectedAddress.latitude ?? 36.8848,
-                lng: selectedAddress.longitude ?? 30.7056
-            )
-            let requestBody = CheckoutRequestBody(
-                deliveryAddress: addressBody,
-                paymentMethod: "CREDIT_CARD",
-                orderType: "DELIVERY",
-                notes: selectedAddress.detail
-            )
-
-            Task {
-                do {
-                    _ = try await authClient.checkoutCart(accessToken: token, body: requestBody)
-                    await loadCart(accessToken: token)
-                    await loadOrders(accessToken: token)
-                    await MainActor.run { onTabChange?(.orders) }
-                } catch {
-                    await MainActor.run {
-                        cartErrorMessage = error.localizedDescription
-                    }
-                }
-            }
+        guard let token = remoteAccessToken else {
+            cartErrorMessage = "Sipariş vermek için giriş yapmalısın."
             return
         }
-
-        repository.placeOrder(
-            total: cartTotal,
-            campaignNote: cartDiscount > 0 ? "40 TL sepet indirimi uygulandı" : "Standart teslimat",
-            addressLine: "\(selectedAddress.line1), \(selectedAddress.detail)",
-            vendorName: cartVendorName ?? "Sipariş"
+        let addressBody = CheckoutAddressBody(
+            street: selectedAddress.line1,
+            district: selectedAddress.regionLine,
+            city: "Antalya",
+            postalCode: "07000",
+            lat: selectedAddress.latitude ?? 36.8848,
+            lng: selectedAddress.longitude ?? 30.7056
         )
-        refreshState()
-        onTabChange?(.orders)
+        let requestBody = CheckoutRequestBody(
+            deliveryAddress: addressBody,
+            paymentMethod: "CREDIT_CARD",
+            orderType: "DELIVERY",
+            notes: selectedAddress.detail
+        )
+
+        Task {
+            do {
+                _ = try await authClient.checkoutCart(accessToken: token, body: requestBody)
+                await loadCart(accessToken: token)
+                await loadOrders(accessToken: token)
+                await MainActor.run { onTabChange?(.orders) }
+            } catch {
+                await MainActor.run {
+                    cartErrorMessage = userFacingErrorMessage(from: error, fallback: "Sipariş oluşturulamadı.")
+                }
+            }
+        }
     }
 
     func loadCart(accessToken: String) async {
@@ -533,7 +525,7 @@ final class ContentViewModel: ObservableObject {
                 cartErrorMessage = nil
                 print("[CartFlow] loadCart treated 404 as empty cart")
             } else {
-                cartErrorMessage = error.localizedDescription
+                cartErrorMessage = userFacingErrorMessage(from: error, fallback: "Sepet servisine ulaşılamadı.")
                 print("[CartFlow] loadCart failed: \(error.localizedDescription)")
             }
         }
@@ -850,5 +842,28 @@ final class ContentViewModel: ObservableObject {
             updated.isFavorite = isFavorite
             return updated
         }
+    }
+}
+
+private extension ContentViewModel {
+    func userFacingErrorMessage(from error: Error, fallback: String) -> String {
+        if let authError = error as? AppAuthError {
+            if authError.statusCode == 401 {
+                return "Oturum süresi doldu. Lütfen tekrar giriş yap."
+            }
+            if authError.statusCode == 503 {
+                return "Servis şu anda kullanılamıyor. Lütfen tekrar dene."
+            }
+        }
+
+        let raw = error.localizedDescription.trimmingCharacters(in: .whitespacesAndNewlines)
+        let lowered = raw.lowercased()
+        if lowered.contains("connection refused") || lowered.contains("timed out") || lowered.contains("could not connect") {
+            return "Servise bağlanılamadı. Lütfen daha sonra tekrar dene."
+        }
+        if raw.isEmpty || lowered.contains("socketexception") || lowered.contains("system.net.") {
+            return fallback
+        }
+        return raw
     }
 }
