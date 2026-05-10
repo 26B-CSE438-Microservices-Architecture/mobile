@@ -533,21 +533,21 @@ enum MockData {
             subtitle: "Binlerce ürün\nindirimlerle kapında",
             style: .quickMarket,
             artwork: .grocery,
-            imageURL: "https://images.unsplash.com/photo-1628102491629-778571d893a3?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+            imageURL: "https://www.pngkey.com/png/detail/84-847211_grocery-png-transparent-picture-transparent-grocery-basket-png.png"
         ),
         HomePrimaryService(
             title: "Yemek",
             subtitle: "Sıcak ve indirimli\nlezzetler",
             style: .food,
             artwork: .burger,
-            imageURL: "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+            imageURL: "https://www.pngall.com/wp-content/uploads/2016/05/Burger-Free-Download-PNG.png"
         ),
         HomePrimaryService(
             title: "Su ve\nDamacana",
             subtitle: "",
             style: .water,
             artwork: .water,
-            imageURL: "https://images.unsplash.com/photo-1602143407151-7111542de6e8?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080"
+            imageURL: "https://www.pngall.com/wp-content/uploads/2016/04/Water-Bottle-Free-Download-PNG.png"
         )
     ]
 

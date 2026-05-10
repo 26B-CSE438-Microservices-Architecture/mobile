@@ -200,9 +200,9 @@ struct HomePrimaryServiceCard: View {
 
                 VStack(alignment: .leading, spacing: 0) {
                     if card.style != .water {
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        RoundedRectangle(cornerRadius: 22, style: .continuous)
                             .fill(titleBackgroundColor)
-                            .frame(height: 92)
+                            .frame(height: 94)
                             .overlay(
                                 VStack(spacing: 5) {
                                     Text(card.title.cleanedForDisplay)
@@ -216,20 +216,23 @@ struct HomePrimaryServiceCard: View {
                                 }
                                 .padding(.horizontal, 8)
                             )
-                            .padding(.horizontal, 10)
-                            .padding(.top, 0)
+                            .padding(.horizontal, 14)
+                            .padding(.top, 8)
                     } else {
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        RoundedRectangle(cornerRadius: 22, style: .continuous)
                             .fill(Color(red: 0.22, green: 0.73, blue: 0.90))
-                            .frame(height: 64)
+                            .frame(height: 78)
                             .overlay(
                                 Text(card.title.cleanedForDisplay)
                                     .font(.system(size: 18, weight: .bold))
                                     .foregroundStyle(.white)
                                     .multilineTextAlignment(.leading)
+                                    .lineLimit(2)
+                                    .padding(.leading, 12)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
                             )
-                            .padding(.horizontal, 0)
-                            .padding(.top, 0)
+                            .padding(.horizontal, 10)
+                            .padding(.top, 8)
                     }
 
                     Spacer(minLength: 0)
@@ -237,22 +240,19 @@ struct HomePrimaryServiceCard: View {
 
                 switch card.style {
                 case .quickMarket:
-                    HomeRemoteImage(urlString: card.imageURL, artwork: card.artwork)
-                        .frame(width: width * 0.93, height: 108)
-                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                        .offset(x: width * 0.035, y: 62)
+                    HomeRemoteImage(urlString: card.imageURL, artwork: card.artwork, contentMode: .fit)
+                        .frame(width: width * 0.94, height: 124)
+                        .offset(x: width * 0.03, y: 66)
 
                 case .food:
-                    HomeRemoteImage(urlString: card.imageURL, artwork: .burger)
-                        .frame(width: width * 0.93, height: 148)
-                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                        .offset(x: width * 0.035, y: 112)
+                    HomeRemoteImage(urlString: card.imageURL, artwork: .burger, contentMode: .fit)
+                        .frame(width: width * 0.96, height: 182)
+                        .offset(x: width * 0.02, y: 86)
 
                 case .water:
-                    HomeRemoteImage(urlString: card.imageURL, artwork: .water)
-                        .frame(width: width * 0.38, height: 58)
-                        .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
-                        .offset(x: width * 0.58, y: 22)
+                    HomeRemoteImage(urlString: card.imageURL, artwork: .water, contentMode: .fit)
+                        .frame(width: width * 0.46, height: 76)
+                        .offset(x: width * 0.52, y: 12)
                 }
             }
         }
@@ -1134,14 +1134,21 @@ struct HomeOpportunitySpotlightCard: View {
 struct HomeRemoteImage: View {
     let urlString: String
     let artwork: HomeArtwork
+    var contentMode: ContentMode = .fill
 
     var body: some View {
         AsyncImage(url: URL(string: urlString)) { phase in
             switch phase {
             case .success(let image):
-                image
-                    .resizable()
-                    .scaledToFill()
+                if contentMode == .fit {
+                    image
+                        .resizable()
+                        .scaledToFit()
+                } else {
+                    image
+                        .resizable()
+                        .scaledToFill()
+                }
 
             default:
                 Rectangle()
